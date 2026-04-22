@@ -683,9 +683,13 @@ const ProductGaps = ({ rows, taxonomy }) => {
 };
 
 // ── TAB 3: TREND ANALYSIS ────────────────────────────────────────────────────
+const DRILL_PAGE_SIZE = 25;
+
 const TrendAnalysis = ({ rows, taxonomy }) => {
-  const [filters, setFilters] = useState({ primaryAspect:'', parentCat:'', subCat:'', territory:'', company:'' });
-  const [metric, setMetric]   = useState('abs');
+  const [filters, setFilters]         = useState({ primaryAspect:'', parentCat:'', subCat:'', territory:'', company:'' });
+  const [metric, setMetric]           = useState('abs');
+  const [expandedMonth, setExpanded]  = useState(null);
+  const [drillPage, setDrillPage]     = useState(0);
 
   const taxLookup = useMemo(() => {
     const m = {};
@@ -701,7 +705,7 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
     companies:      [...new Set(rows.map(r=>r.COMPANY||r.CO_ID).filter(Boolean))].sort(),
   }), [rows, taxonomy]);
 
-  const setF = (k,v) => setFilters(f=>({...f,[k]:v}));
+  const setF = (k,v) => { setFilters(f=>({...f,[k]:v})); setExpanded(null); setDrillPage(0); };
 
   const filtered = useMemo(() => rows.filter(r => {
     const tax = taxLookup[r.SUB_CAT_CODE] || {};
@@ -761,8 +765,24 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
     const prevV  = prev ? metricVal(prev) : null;
     const change = prevV !== null ? val - prevV : null;
     const pct    = prevV !== null && prevV !== 0 ? change/Math.abs(prevV)*100 : null;
-    return { date:m.date, val, change, pct };
+    return { key: m.key, date: m.date, val, change, pct };
   }).reverse(), [monthlyData, metric]);
+
+  // Drill-down rows for the expanded month, sorted by abs exposure desc
+  const drillRows = useMemo(() => {
+    if (!expandedMonth) return [];
+    return filtered
+      .filter(r => monthKey(parseMonth(r.MONTH)) === expandedMonth)
+      .sort((a,b) => (Math.abs(parseFloat(b.ADJUSTMENT_USD)||0)) - (Math.abs(parseFloat(a.ADJUSTMENT_USD)||0)));
+  }, [filtered, expandedMonth]);
+
+  const totalDrillPages = Math.ceil(drillRows.length / DRILL_PAGE_SIZE);
+  const drillPageRows   = drillRows.slice(drillPage * DRILL_PAGE_SIZE, (drillPage+1) * DRILL_PAGE_SIZE);
+
+  const toggleMonth = (mk) => {
+    if (expandedMonth === mk) { setExpanded(null); }
+    else { setExpanded(mk); setDrillPage(0); }
+  };
 
   const activeCount = Object.values(filters).filter(Boolean).length;
   const METRICS = [['abs','Abs exposure'],['net','Net exposure'],['records','Volume']];
@@ -772,7 +792,7 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
       <div className="section-header">
         <div>
           <h2 className="section-title">Trend analysis</h2>
-          <p className="section-sub">{fmt.number(filtered.length)} records · {activeCount} filter{activeCount!==1?'s':''} active</p>
+          <p className="section-sub">{fmt.number(filtered.length)} records · {activeCount} filter{activeCount!==1?'s':''} active · click any month row to drill into records</p>
         </div>
         <div className="metric-toggle">
           {METRICS.map(([k,l])=><button key={k} className={`metric-btn${metric===k?' active':''}`} onClick={()=>setMetric(k)}>{l}</button>)}
@@ -796,7 +816,7 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
           </div>
         ))}
         {activeCount>0 && (
-          <button className="clear-btn" onClick={()=>setFilters({primaryAspect:'',parentCat:'',subCat:'',territory:'',company:''})}>
+          <button className="clear-btn" onClick={()=>{ setFilters({primaryAspect:'',parentCat:'',subCat:'',territory:'',company:''}); setExpanded(null); }}>
             Clear all
           </button>
         )}
@@ -817,30 +837,167 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
         }
       </div>
 
-      {momRows.length > 1 && (
+      {momRows.length > 0 && (
         <div className="chart-card">
-          <div className="chart-title">Month-over-month change table</div>
+          <div className="chart-title">Month-over-month change — click a row to view records</div>
           <div className="table-wrap" style={{border:'none',borderRadius:0,marginBottom:0}}>
             <table className="data-table">
               <thead><tr>
+                <th style={{width:28}}></th>
                 <th>Month</th>
                 <th className="r">{metric==='records'?'Volume':metric==='abs'?'Abs exposure':'Net exposure'}</th>
                 <th className="r">MoM change</th>
                 <th className="r">MoM %</th>
               </tr></thead>
               <tbody>
-                {momRows.map((m,i)=>(
-                  <tr key={i}>
-                    <td>{fmt.monthFull(m.date)}</td>
-                    <td className="r">{metric==='records'?fmt.number(m.val):fmt.currency(m.val)}</td>
-                    <td className={`r${m.change===null?'':m.change>0?' neg':' pos'}`}>
-                      {m.change===null?'—':`${m.change>0?'+':''}${metric==='records'?fmt.number(m.change):fmt.currency(m.change)}`}
-                    </td>
-                    <td className={`r${m.pct===null?'':m.pct>0?' neg':' pos'}`}>
-                      {m.pct===null?'—':`${m.pct>0?'+':''}${m.pct.toFixed(1)}%`}
-                    </td>
-                  </tr>
-                ))}
+                {momRows.map((m,i) => {
+                  const isOpen = expandedMonth === m.key;
+                  return (
+                    <React.Fragment key={m.key}>
+                      <tr
+                        className={`gap-row${isOpen?' open':''}`}
+                        onClick={() => toggleMonth(m.key)}
+                      >
+                        <td className="expand-cell">{isOpen?'▼':'▶'}</td>
+                        <td style={{fontWeight: isOpen ? 600 : 400}}>{fmt.monthFull(m.date)}</td>
+                        <td className="r">{metric==='records'?fmt.number(m.val):fmt.currency(m.val)}</td>
+                        <td className={`r${m.change===null?'':m.change>0?' neg':' pos'}`}>
+                          {m.change===null?'—':`${m.change>0?'+':''}${metric==='records'?fmt.number(m.change):fmt.currency(m.change)}`}
+                        </td>
+                        <td className={`r${m.pct===null?'':m.pct>0?' neg':' pos'}`}>
+                          {m.pct===null?'—':`${m.pct>0?'+':''}${m.pct.toFixed(1)}%`}
+                        </td>
+                      </tr>
+
+                      {isOpen && (
+                        <tr>
+                          <td className="detail-td" colSpan={5}>
+                            <div className="detail-panel" style={{padding:'16px 20px'}}>
+
+                              {/* Drill header */}
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px',flexWrap:'wrap',gap:'8px'}}>
+                                <div>
+                                  <span className="detail-sub-hdr" style={{marginBottom:0}}>
+                                    {fmt.monthFull(m.date)} — {fmt.number(drillRows.length)} record{drillRows.length!==1?'s':''}
+                                  </span>
+                                  {activeCount > 0 && (
+                                    <span style={{marginLeft:'10px',color:'var(--text-secondary)',fontSize:'0.75rem'}}>
+                                      {Object.entries(filters).filter(([,v])=>v).map(([,v])=>v).join(' · ')}
+                                    </span>
+                                  )}
+                                </div>
+                                {totalDrillPages > 1 && (
+                                  <div style={{display:'flex',alignItems:'center',gap:'8px',fontSize:'0.75rem',color:'var(--text-secondary)'}}>
+                                    <button
+                                      onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.max(0,p-1))}}
+                                      disabled={drillPage===0}
+                                      style={{
+                                        padding:'4px 10px',border:'1px solid var(--container-outline-variant)',
+                                        borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',
+                                        cursor:drillPage===0?'not-allowed':'pointer',
+                                        color:drillPage===0?'var(--text-disabled)':'var(--text-primary)',
+                                        fontFamily:'var(--font)',fontSize:'0.75rem'
+                                      }}
+                                    >← Prev</button>
+                                    <span>Page {drillPage+1} of {totalDrillPages}</span>
+                                    <button
+                                      onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.min(totalDrillPages-1,p+1))}}
+                                      disabled={drillPage===totalDrillPages-1}
+                                      style={{
+                                        padding:'4px 10px',border:'1px solid var(--container-outline-variant)',
+                                        borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',
+                                        cursor:drillPage===totalDrillPages-1?'not-allowed':'pointer',
+                                        color:drillPage===totalDrillPages-1?'var(--text-disabled)':'var(--text-primary)',
+                                        fontFamily:'var(--font)',fontSize:'0.75rem'
+                                      }}
+                                    >Next →</button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Drill table */}
+                              <div style={{overflowX:'auto',borderRadius:'var(--radius-sm)',border:'1px solid var(--surface-high)'}}>
+                                <table className="sub-table" style={{fontSize:'0.75rem',minWidth:'900px'}}>
+                                  <thead style={{background:'var(--surface-high)'}}>
+                                    <tr>
+                                      <th>Employee</th>
+                                      <th>Company</th>
+                                      <th>Territory</th>
+                                      <th>Currency</th>
+                                      <th className="r">Adj (billing)</th>
+                                      <th className="r">Adj USD</th>
+                                      <th className="r">Abs USD</th>
+                                      <th>Primary aspect</th>
+                                      <th>Sub-category</th>
+                                      <th className="r">Confidence</th>
+                                      <th>Tags</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {drillPageRows.map((r,ri) => {
+                                      const tax  = taxLookup[r.SUB_CAT_CODE] || {};
+                                      const adj  = parseFloat(r.ADJUSTMENT_USD) || 0;
+                                      const conf = parseFloat(r.CONFIDENCE) || 0;
+                                      const confColor = conf >= 0.9 ? 'var(--color-success-main)' : conf >= 0.75 ? 'var(--color-warning-main)' : 'var(--color-error-main)';
+                                      return (
+                                        <tr key={ri}>
+                                          <td style={{fontWeight:500}}>{r.EE_NAME || '—'}</td>
+                                          <td>{r.COMPANY || r.CO_ID || '—'}</td>
+                                          <td>{r.TERRITORY || r.COUNTRY_CODE || '—'}</td>
+                                          <td>{r.BIL_CURRENCY || '—'}</td>
+                                          <td className="r">{r.ADJUSTMENT_BIL !== '' && r.ADJUSTMENT_BIL !== undefined ? parseFloat(r.ADJUSTMENT_BIL).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</td>
+                                          <td className={`r ${adj<0?'neg':'pos'}`}>{fmt.currencyFull(adj)}</td>
+                                          <td className="r">{fmt.currencyFull(Math.abs(adj))}</td>
+                                          <td>{r.PRIMARY_ASPECT || '—'}</td>
+                                          <td>
+                                            {r.SUB_CAT_CODE
+                                              ? <span title={tax['Sub-Category Name']||''}>
+                                                  <code className="code-pill">{r.SUB_CAT_CODE}</code>
+                                                  {tax['Sub-Category Name'] && <span style={{marginLeft:6,color:'var(--text-secondary)',fontSize:'0.6875rem'}}>{tax['Sub-Category Name']}</span>}
+                                                </span>
+                                              : '—'
+                                            }
+                                          </td>
+                                          <td className="r" style={{color:confColor,fontWeight:600}}>
+                                            {conf > 0 ? `${(conf*100).toFixed(0)}%` : '—'}
+                                          </td>
+                                          <td style={{color:'var(--text-secondary)',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis'}}>{r.TAGS||'—'}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              {/* Bottom pagination */}
+                              {totalDrillPages > 1 && (
+                                <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:'8px',marginTop:'12px',fontSize:'0.75rem',color:'var(--text-secondary)'}}>
+                                  <button onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.max(0,p-1))}} disabled={drillPage===0}
+                                    style={{padding:'4px 12px',border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',cursor:drillPage===0?'not-allowed':'pointer',fontFamily:'var(--font)',fontSize:'0.75rem',color:drillPage===0?'var(--text-disabled)':'var(--text-primary)'}}>
+                                    ← Previous
+                                  </button>
+                                  {Array.from({length:totalDrillPages},(_,pi)=>(
+                                    <button key={pi} onClick={e=>{e.stopPropagation();setDrillPage(pi)}}
+                                      style={{padding:'4px 10px',border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',fontFamily:'var(--font)',fontSize:'0.75rem',cursor:'pointer',
+                                        background: pi===drillPage ? 'var(--color-primary-main)' : 'var(--bg-paper)',
+                                        color: pi===drillPage ? '#fff' : 'var(--text-primary)'}}>
+                                      {pi+1}
+                                    </button>
+                                  ))}
+                                  <button onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.min(totalDrillPages-1,p+1))}} disabled={drillPage===totalDrillPages-1}
+                                    style={{padding:'4px 12px',border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',cursor:drillPage===totalDrillPages-1?'not-allowed':'pointer',fontFamily:'var(--font)',fontSize:'0.75rem',color:drillPage===totalDrillPages-1?'var(--text-disabled)':'var(--text-primary)'}}>
+                                    Next →
+                                  </button>
+                                </div>
+                              )}
+
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
