@@ -4,168 +4,287 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Variance Analysis Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
+/* ── Playroll Design Tokens ── */
 :root {
-  --bg:     #0F0E17;
-  --bg2:    #1A1A2E;
-  --bg3:    #16213E;
-  --border: #252545;
-  --text:   #E8EDF5;
-  --text2:  #8B8FA8;
-  --purple: #5B4FE8;
-  --coral:  #E94560;
-  --teal:   #00C2A8;
-  --gold:   #F5A623;
+  --color-primary-light:   #AF91EF;
+  --color-primary-main:    #5110DD;
+  --color-primary-dark:    #3A0B9D;
+
+  --color-secondary-main:  #36B1FF;
+
+  --color-error-main:    #F44336;
+  --color-success-main:  #66BB6A;
+  --color-warning-main:  #FFA726;
+
+  --text-primary:   #1D1B20;
+  --text-secondary: #49454F;
+  --text-disabled:  #9C96A2;
+
+  --bg-default: #F8F9FF;
+  --bg-paper:   #FFFFFF;
+
+  --container-outline:         #7A757F;
+  --container-outline-variant: #CAC4CF;
+  --surface-low:    #F6F6F7;
+  --surface-high:   #E9E9EA;
+  --surface-highest:#DADADC;
+
+  --shadow-elevation: 0px 0px 6px rgba(0,0,0,0.1);
+  --shadow-menu:      1px 1px 6px 0 #D4D4D4;
+
+  --radius:        12px;
+  --radius-sm:     10px;
+  --radius-chip:   16px;
+
+  --font: 'Poppins', 'Roboto', sans-serif;
 }
+
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:Arial,sans-serif;font-size:14px;line-height:1.5}
-button,select{font-family:inherit}
+body{
+  background:var(--bg-default);
+  color:var(--text-primary);
+  font-family:var(--font);
+  font-size:0.875rem;
+  font-weight:400;
+  line-height:1.45;
+}
+button,select,input{font-family:inherit}
 
 /* ── Layout ── */
 .app{min-height:100vh;display:flex;flex-direction:column}
 .app-header{
-  background:var(--bg2);border-bottom:1px solid var(--border);
-  padding:0 24px;height:64px;display:flex;align-items:center;
-  justify-content:space-between;position:sticky;top:0;z-index:100
+  background:var(--bg-paper);
+  border-bottom:1px solid var(--surface-high);
+  padding:0 24px;
+  height:64px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+  box-shadow: var(--shadow-elevation);
 }
 .header-left{display:flex;flex-direction:column;gap:2px}
-.logo{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-0.01em}
-.header-sub{font-size:11px;color:var(--text2)}
+.logo{font-size:1rem;font-weight:600;color:var(--text-primary)}
+.header-sub{font-size:0.75rem;font-weight:500;color:var(--text-secondary)}
 .app-main{flex:1;padding:24px;overflow-y:auto}
 .tab-content{max-width:1440px;margin:0 auto}
 
 /* ── Tabs ── */
 .tab-nav{display:flex;gap:4px}
 .tab-btn{
-  padding:7px 18px;border:none;background:transparent;
-  color:var(--text2);font-size:13px;cursor:pointer;
-  border-radius:6px;transition:all .15s;white-space:nowrap
+  padding:8px 18px;
+  border:none;
+  background:transparent;
+  color:var(--text-secondary);
+  font-family:var(--font);
+  font-size:0.8125rem;
+  font-weight:500;
+  cursor:pointer;
+  border-radius:var(--radius);
+  transition:background .15s, color .15s;
+  white-space:nowrap;
 }
-.tab-btn:hover{background:var(--bg3);color:var(--text)}
-.tab-btn.active{background:var(--purple);color:#fff}
+.tab-btn:hover{background:var(--surface-low);color:var(--text-primary)}
+.tab-btn.active{background:var(--color-primary-main);color:#fff}
 
 /* ── KPI Cards ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
-.kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px}
-.kpi-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
-.kpi-value{font-size:26px;font-weight:700;color:var(--text);line-height:1.1}
-.kpi-value.pos{color:var(--teal)}
-.kpi-value.neg{color:var(--coral)}
-.kpi-sub{font-size:11px;color:var(--text2);margin-top:4px}
+.kpi-card{
+  background:var(--bg-paper);
+  border-radius:var(--radius);
+  padding:16px;
+  box-shadow:var(--shadow-elevation);
+}
+.kpi-label{
+  font-size:0.6875rem;font-weight:500;
+  color:var(--text-secondary);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  margin-bottom:6px;
+}
+.kpi-value{font-size:1.5rem;font-weight:600;color:var(--text-primary);line-height:1.2}
+.kpi-value.pos{color:var(--color-success-main)}
+.kpi-value.neg{color:var(--color-error-main)}
+.kpi-sub{font-size:0.75rem;font-weight:500;color:var(--text-secondary);margin-top:4px}
 
 /* ── Peak Strip ── */
 .peak-strip{
-  display:flex;gap:0;background:var(--bg2);border:1px solid var(--border);
-  border-radius:10px;margin-bottom:20px;overflow:hidden
+  display:flex;
+  background:var(--bg-paper);
+  border-radius:var(--radius);
+  margin-bottom:20px;
+  overflow:hidden;
+  box-shadow:var(--shadow-elevation);
 }
 .peak-item{
-  flex:1;padding:12px 18px;display:flex;flex-direction:column;gap:3px;
-  border-right:1px solid var(--border)
+  flex:1;padding:12px 18px;
+  display:flex;flex-direction:column;gap:3px;
+  border-right:1px solid var(--surface-high);
 }
 .peak-item:last-child{border-right:none}
-.peak-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
-.peak-val{font-size:13px;font-weight:600;color:var(--text)}
-.peak-val.pos{color:var(--teal)}
-.peak-val.neg{color:var(--coral)}
+.peak-label{font-size:0.6875rem;font-weight:500;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em}
+.peak-val{font-size:0.8125rem;font-weight:600;color:var(--text-primary)}
+.peak-val.pos{color:var(--color-success-main)}
+.peak-val.neg{color:var(--color-error-main)}
 
 /* ── Charts ── */
 .charts-row{display:flex;gap:16px;margin-bottom:20px}
 @media(max-width:900px){.charts-row{flex-direction:column}}
 .chart-card{
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:10px;padding:18px;margin-bottom:20px
+  background:var(--bg-paper);
+  border-radius:var(--radius);
+  padding:20px;
+  margin-bottom:20px;
+  box-shadow:var(--shadow-elevation);
 }
 .chart-title{
-  font-size:13px;font-weight:600;color:var(--text);
-  margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap
+  font-size:0.875rem;font-weight:600;color:var(--text-primary);
+  margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
 
 /* ── Section Headers ── */
 .section-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:16px;flex-wrap:wrap}
-.section-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:3px}
-.section-sub{font-size:12px;color:var(--text2)}
+.section-title{font-size:1rem;font-weight:600;color:var(--text-primary);margin-bottom:3px}
+.section-sub{font-size:0.75rem;font-weight:500;color:var(--text-secondary)}
 
 /* ── Tables ── */
-.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-bottom:20px}
-table.data-table{width:100%;border-collapse:collapse;font-size:13px}
-table.data-table thead{background:var(--bg3)}
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--surface-high);margin-bottom:20px}
+table.data-table{width:100%;border-collapse:collapse;font-size:0.8125rem}
+table.data-table thead{background:var(--surface-low)}
 table.data-table th{
-  padding:10px 14px;text-align:left;font-size:10px;color:var(--text2);
-  text-transform:uppercase;letter-spacing:.06em;font-weight:500;white-space:nowrap
+  padding:10px 14px;text-align:left;
+  font-size:0.6875rem;font-weight:500;
+  color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.06em;
+  white-space:nowrap;
 }
 table.data-table th.r{text-align:right}
-table.data-table td{padding:10px 14px;border-top:1px solid var(--border);color:var(--text);white-space:nowrap}
+table.data-table td{
+  padding:10px 14px;
+  border-top:1px solid var(--surface-high);
+  color:var(--text-primary);
+  white-space:nowrap;
+}
 table.data-table td.r{text-align:right}
-table.data-table td.pos{color:var(--teal)}
-table.data-table td.neg{color:var(--coral)}
+table.data-table td.pos{color:var(--color-success-main)}
+table.data-table td.neg{color:var(--color-error-main)}
 .gap-row{cursor:pointer;transition:background .1s}
-.gap-row:hover,.gap-row.open{background:var(--bg3)}
-.expand-cell{color:var(--text2);font-size:10px;width:28px;padding-left:16px!important}
+.gap-row:hover,.gap-row.open{background:var(--surface-low)}
+.expand-cell{color:var(--text-secondary);font-size:0.625rem;width:28px;padding-left:16px!important}
 .gap-name{font-weight:600}
 .priority-badge{
-  display:inline-block;padding:2px 10px;border-radius:12px;
-  font-size:11px;font-weight:600
+  display:inline-block;padding:3px 10px;
+  border-radius:var(--radius-chip);
+  font-size:0.6875rem;font-weight:600;
 }
 .code-pill{
-  background:#5B4FE820;color:var(--purple);
-  padding:2px 8px;border-radius:4px;font-size:11px;font-family:monospace
+  background:#5110DD15;color:var(--color-primary-main);
+  padding:2px 8px;border-radius:6px;font-size:0.6875rem;font-family:monospace;
 }
 
 /* ── Detail Panel ── */
 .detail-td{padding:0!important;border-top:none!important}
-.detail-panel{background:var(--bg);padding:16px 24px;border-top:1px solid var(--border)}
-.detail-sub-hdr{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
-table.sub-table{width:100%;border-collapse:collapse;font-size:12px}
-table.sub-table th{padding:5px 12px;text-align:left;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.detail-panel{background:var(--surface-low);padding:16px 24px;border-top:1px solid var(--surface-high)}
+.detail-sub-hdr{font-size:0.6875rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+table.sub-table{width:100%;border-collapse:collapse;font-size:0.75rem}
+table.sub-table th{padding:5px 12px;text-align:left;color:var(--text-secondary);font-size:0.6875rem;text-transform:uppercase;letter-spacing:.05em;font-weight:500}
 table.sub-table th.r{text-align:right}
-table.sub-table td{padding:6px 12px;border-top:1px solid var(--border);color:var(--text)}
+table.sub-table td{padding:6px 12px;border-top:1px solid var(--surface-high);color:var(--text-primary)}
 table.sub-table td.r{text-align:right}
-table.sub-table td.pos{color:var(--teal)}
-table.sub-table td.neg{color:var(--coral)}
+table.sub-table td.pos{color:var(--color-success-main)}
+table.sub-table td.neg{color:var(--color-error-main)}
 
 /* ── Filters ── */
 .filter-panel{
   display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:10px;padding:14px 16px;margin-bottom:20px
+  background:var(--bg-paper);
+  border-radius:var(--radius);
+  padding:16px;
+  margin-bottom:20px;
+  box-shadow:var(--shadow-elevation);
 }
 .filter-group{display:flex;flex-direction:column;gap:4px;min-width:160px}
-.filter-group label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
-.f-select{
-  background:var(--bg3);border:1px solid var(--border);color:var(--text);
-  padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer;
-  appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238B8FA8'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 10px center;padding-right:28px
+.filter-group label{
+  font-size:0.6875rem;font-weight:500;
+  color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.06em;
 }
-.f-select:focus{outline:none;border-color:var(--purple)}
+.f-select{
+  background:var(--bg-paper);
+  border:1px solid var(--container-outline-variant);
+  color:var(--text-primary);
+  padding:7px 28px 7px 10px;
+  border-radius:var(--radius-sm);
+  font-size:0.8125rem;
+  font-family:var(--font);
+  cursor:pointer;
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2349454F'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  transition:border-color .15s;
+}
+.f-select:focus{outline:none;border-color:var(--color-primary-main)}
+.f-select:hover{border-color:var(--container-outline)}
 
 .metric-toggle{display:flex;gap:4px}
 .metric-btn{
-  padding:7px 14px;border:1px solid var(--border);background:var(--bg3);
-  color:var(--text2);border-radius:6px;font-size:12px;cursor:pointer;transition:all .15s
+  padding:8px 14px;
+  border:1px solid var(--container-outline-variant);
+  background:var(--bg-paper);
+  color:var(--text-secondary);
+  border-radius:var(--radius-sm);
+  font-size:0.8125rem;
+  font-family:var(--font);
+  font-weight:500;
+  cursor:pointer;
+  transition:all .15s;
 }
-.metric-btn:hover{border-color:var(--purple);color:var(--text)}
-.metric-btn.active{background:var(--purple);border-color:var(--purple);color:#fff}
+.metric-btn:hover{border-color:var(--color-primary-main);color:var(--color-primary-main)}
+.metric-btn.active{background:var(--color-primary-main);border-color:var(--color-primary-main);color:#fff}
 
 .clear-btn{
-  padding:7px 14px;border:1px solid var(--coral);background:transparent;
-  color:var(--coral);border-radius:6px;font-size:12px;cursor:pointer
+  padding:8px 14px;
+  border:1px solid var(--container-outline-variant);
+  background:transparent;
+  color:var(--color-error-main);
+  border-color:var(--color-error-main);
+  border-radius:var(--radius-sm);
+  font-size:0.8125rem;
+  font-family:var(--font);
+  font-weight:500;
+  cursor:pointer;
+  transition:background .15s;
 }
-.clear-btn:hover{background:#E9456015}
+.clear-btn:hover{background:#F4433608}
 
-.filter-tag{background:#5B4FE825;color:var(--purple);padding:2px 8px;border-radius:10px;font-size:11px}
-.no-data{text-align:center;color:var(--text2);padding:48px;font-size:13px}
+.filter-tag{
+  background:#5110DD12;
+  color:var(--color-primary-main);
+  padding:3px 10px;
+  border-radius:var(--radius-chip);
+  font-size:0.6875rem;
+  font-weight:500;
+}
+.no-data{text-align:center;color:var(--text-secondary);padding:48px;font-size:0.8125rem}
 
 /* ── Loading / Error ── */
 .center-screen{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
-.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .8s linear infinite}
+.spinner{
+  width:40px;height:40px;
+  border:3px solid var(--surface-high);
+  border-top-color:var(--color-primary-main);
+  border-radius:50%;
+  animation:spin .8s linear infinite;
+}
 @keyframes spin{to{transform:rotate(360deg)}}
-.err-title{color:var(--coral);font-size:18px;font-weight:600}
-.err-msg{color:var(--text2);font-size:13px;max-width:440px;text-align:center;line-height:1.6}
+.err-title{color:var(--color-error-main);font-size:1.125rem;font-weight:600}
+.err-msg{color:var(--text-secondary);font-size:0.8125rem;max-width:440px;text-align:center;line-height:1.6}
 </style>
 </head>
 <body>
@@ -189,7 +308,7 @@ const fmt = {
   currencyFull: n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(parseFloat(n)||0),
   number: n => new Intl.NumberFormat('en-US').format(Math.round(parseFloat(n)||0)),
   pct: n => `${(parseFloat(n)||0).toFixed(1)}%`,
-month: d => {
+  month: d => {
     if (!d) return '';
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return `${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
@@ -211,13 +330,14 @@ const parseMonth = m => {
 
 const monthKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '';
 
-const CHART_COLORS = ['#5B4FE8','#E94560','#00C2A8','#F5A623','#4ECDC4','#FF6B6B','#A8DADC','#F38181','#95E1D3','#457B9D','#E63946','#2A9D8F'];
+// Playroll-aligned chart colors: primary purple + semantic palette
+const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D','#267EB5','#388E3C'];
 
 const PRIORITY_CONF = {
-  Critical: { color:'#E94560', bg:'#E9456020' },
-  High:     { color:'#F5A623', bg:'#F5A62320' },
-  Medium:   { color:'#5B4FE8', bg:'#5B4FE820' },
-  Low:      { color:'#00C2A8', bg:'#00C2A820' }
+  Critical: { color:'#F44336', bg:'#F4433618' },
+  High:     { color:'#FFA726', bg:'#FFA72618' },
+  Medium:   { color:'#5110DD', bg:'#5110DD18' },
+  Low:      { color:'#66BB6A', bg:'#66BB6A18' }
 };
 
 const getPriority = (abs, records) => {
@@ -225,6 +345,13 @@ const getPriority = (abs, records) => {
   if (abs >= 50000  || records >= 150) return 'High';
   if (abs >= 15000  || records >= 50)  return 'Medium';
   return 'Low';
+};
+
+// Chart.js defaults for Playroll light theme
+const CHART_SCALE_DEFAULTS = {
+  tickColor: '#49454F',
+  gridColor: '#E9E9EA',
+  fontSize: 11,
 };
 
 // ── Reusable Chart Canvas ────────────────────────────────────────────────────
@@ -244,7 +371,7 @@ const ChartCanvas = ({ config, height = 240 }) => {
 const LoadingScreen = () => (
   <div className="center-screen">
     <div className="spinner" />
-    <p style={{color:'var(--text2)',fontSize:'13px'}}>Loading dashboard data…</p>
+    <p style={{color:'var(--text-secondary)',fontSize:'0.8125rem'}}>Loading dashboard data…</p>
   </div>
 );
 
@@ -252,7 +379,7 @@ const ErrorScreen = ({ msg }) => (
   <div className="center-screen">
     <div className="err-title">Failed to load data</div>
     <div className="err-msg">{msg}</div>
-    <div className="err-msg" style={{marginTop:8,fontSize:12}}>
+    <div className="err-msg" style={{marginTop:8,fontSize:'0.75rem'}}>
       Make sure APPS_SCRIPT_URL is set correctly in index.html and the script is deployed as a Web App accessible to "Anyone".
     </div>
   </div>
@@ -309,21 +436,21 @@ const Overview = ({ rows }) => {
     data:{
       labels: stats.sortedMonths.map(m=>fmt.month(m.date)),
       datasets:[
-        { label:'Records', data:stats.sortedMonths.map(m=>m.records), backgroundColor:'#5B4FE880', borderColor:'#5B4FE8', borderWidth:1, yAxisID:'y', order:2 },
-        { label:'Abs Exposure ($)', data:stats.sortedMonths.map(m=>m.abs), type:'line', borderColor:'#E94560', backgroundColor:'#E9456015', borderWidth:2, pointRadius:3, fill:true, yAxisID:'y1', order:1, tension:0.3 }
+        { label:'Records', data:stats.sortedMonths.map(m=>m.records), backgroundColor:'#5110DD30', borderColor:'#5110DD', borderWidth:1.5, yAxisID:'y', order:2 },
+        { label:'Abs Exposure ($)', data:stats.sortedMonths.map(m=>m.abs), type:'line', borderColor:'#F44336', backgroundColor:'#F4433610', borderWidth:2, pointRadius:3, fill:true, yAxisID:'y1', order:1, tension:0.3 }
       ]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
       plugins:{
-        legend:{ labels:{ color:'#8B8FA8', font:{ size:11 } } },
+        legend:{ labels:{ color:'#49454F', font:{ family:'Poppins', size:11 } } },
         tooltip:{ callbacks:{ label: ctx => ctx.datasetIndex===0 ? `Records: ${ctx.parsed.y}` : `Exposure: ${fmt.currencyFull(ctx.parsed.y)}` } }
       },
       scales:{
-        x:{ ticks:{ color:'#8B8FA8', font:{ size:10 } }, grid:{ color:'#1E2040' } },
-        y:{ ticks:{ color:'#8B8FA8', font:{ size:10 } }, grid:{ color:'#1E2040' }, title:{ display:true, text:'Records', color:'#8B8FA8', font:{ size:10 } } },
-        y1:{ position:'right', ticks:{ color:'#8B8FA8', font:{ size:10 }, callback:v=>fmt.currency(v) }, grid:{ display:false } }
+        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ color:'#E9E9EA' } },
+        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ color:'#E9E9EA' }, title:{ display:true, text:'Records', color:'#49454F', font:{family:'Poppins',size:10} } },
+        y1:{ position:'right', ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, callback:v=>fmt.currency(v) }, grid:{ display:false } }
       }
     }
   }), [stats]);
@@ -338,7 +465,7 @@ const Overview = ({ rows }) => {
       },
       options:{
         responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ position:'right', labels:{ color:'#8B8FA8', font:{ size:11 }, padding:10, boxWidth:12 } } }
+        plugins:{ legend:{ position:'right', labels:{ color:'#49454F', font:{family:'Poppins',size:11}, padding:10, boxWidth:12 } } }
       }
     };
   }, [stats]);
@@ -348,44 +475,44 @@ const Overview = ({ rows }) => {
   return (
     <div className="tab-content">
       <div className="kpi-grid">
-        <KPICard label="Total Records"      value={fmt.number(rows.length)} sub="All adjustments" />
-        <KPICard label="Absolute Exposure"  value={fmt.currency(totalAbs)} sub="Total financial magnitude" />
-        <KPICard label="Net Exposure"       value={fmt.currency(totalNet)} sign={totalNet>=0?'pos':'neg'} />
-        <KPICard label="Avg per Adjustment" value={fmt.currency(rows.length?totalAbs/rows.length:0)} />
-        <KPICard label="Unique Companies"   value={fmt.number(companies)} />
-        <KPICard label="Unique Employees"   value={fmt.number(employees)} />
+        <KPICard label="Total records"      value={fmt.number(rows.length)} sub="All adjustments" />
+        <KPICard label="Absolute exposure"  value={fmt.currency(totalAbs)} sub="Total financial magnitude" />
+        <KPICard label="Net exposure"       value={fmt.currency(totalNet)} sign={totalNet>=0?'pos':'neg'} />
+        <KPICard label="Avg per adjustment" value={fmt.currency(rows.length?totalAbs/rows.length:0)} />
+        <KPICard label="Unique companies"   value={fmt.number(companies)} />
+        <KPICard label="Unique employees"   value={fmt.number(employees)} />
       </div>
 
       <div className="peak-strip">
-        {peakVol  && <div className="peak-item"><span className="peak-label">Peak Month (Volume)</span><span className="peak-val">{fmt.monthFull(peakVol.date)} — {fmt.number(peakVol.records)} records</span></div>}
-        {peakExp  && <div className="peak-item"><span className="peak-label">Peak Month (Exposure)</span><span className="peak-val">{fmt.monthFull(peakExp.date)} — {fmt.currency(peakExp.abs)}</span></div>}
-        {latestMonth && <div className="peak-item"><span className="peak-label">Latest Month Records</span><span className="peak-val">{fmt.number(latestMonth.records)}</span></div>}
-        <div className="peak-item"><span className="peak-label">MoM Volume</span><span className={`peak-val ${momRec>0?'neg':momRec<0?'pos':''}`}>{momRec>0?'+':''}{momRec.toFixed(1)}%</span></div>
-        <div className="peak-item"><span className="peak-label">MoM Exposure</span><span className={`peak-val ${momExp>0?'neg':momExp<0?'pos':''}`}>{momExp>0?'+':''}{momExp.toFixed(1)}%</span></div>
+        {peakVol  && <div className="peak-item"><span className="peak-label">Peak month (volume)</span><span className="peak-val">{fmt.monthFull(peakVol.date)} — {fmt.number(peakVol.records)} records</span></div>}
+        {peakExp  && <div className="peak-item"><span className="peak-label">Peak month (exposure)</span><span className="peak-val">{fmt.monthFull(peakExp.date)} — {fmt.currency(peakExp.abs)}</span></div>}
+        {latestMonth && <div className="peak-item"><span className="peak-label">Latest month records</span><span className="peak-val">{fmt.number(latestMonth.records)}</span></div>}
+        <div className="peak-item"><span className="peak-label">MoM volume</span><span className={`peak-val ${momRec>0?'neg':momRec<0?'pos':''}`}>{momRec>0?'+':''}{momRec.toFixed(1)}%</span></div>
+        <div className="peak-item"><span className="peak-label">MoM exposure</span><span className={`peak-val ${momExp>0?'neg':momExp<0?'pos':''}`}>{momExp>0?'+':''}{momExp.toFixed(1)}%</span></div>
       </div>
 
       <div className="charts-row">
         <div className="chart-card" style={{flex:2}}>
-          <div className="chart-title">Monthly Volume &amp; Absolute Exposure Trend</div>
+          <div className="chart-title">Monthly volume &amp; absolute exposure trend</div>
           <ChartCanvas config={monthlyChartCfg} height={240} />
         </div>
         <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">Records by Primary Aspect</div>
+          <div className="chart-title">Records by primary aspect</div>
           <ChartCanvas config={donutCfg} height={240} />
         </div>
       </div>
 
       <div className="chart-card">
-        <div className="chart-title">Absolute Exposure by Primary Aspect</div>
+        <div className="chart-title">Absolute exposure by primary aspect</div>
         <div className="table-wrap" style={{marginBottom:0,border:'none',borderRadius:0}}>
           <table className="data-table">
             <thead><tr>
-              <th>Primary Aspect</th>
+              <th>Primary aspect</th>
               <th className="r">Records</th>
-              <th className="r">% of Total</th>
-              <th className="r">Absolute Exposure</th>
-              <th className="r">Net Exposure</th>
-              <th className="r">Avg / Record</th>
+              <th className="r">% of total</th>
+              <th className="r">Absolute exposure</th>
+              <th className="r">Net exposure</th>
+              <th className="r">Avg / record</th>
             </tr></thead>
             <tbody>
               {Object.entries(stats.aspects).sort((a,b)=>b[1].abs-a[1].abs).map(([pa,d])=>(
@@ -456,14 +583,14 @@ const ProductGaps = ({ rows, taxonomy }) => {
     type:'bar',
     data:{
       labels: gapData.map(g=>g.parent.length>30?g.parent.slice(0,28)+'…':g.parent),
-      datasets:[{ label:'Absolute Exposure', data:gapData.map(g=>g.abs), backgroundColor:CHART_COLORS.slice(0,gapData.length), borderWidth:0, borderRadius:4 }]
+      datasets:[{ label:'Absolute exposure', data:gapData.map(g=>g.abs), backgroundColor:CHART_COLORS.slice(0,gapData.length), borderWidth:0, borderRadius:6 }]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>`${fmt.currencyFull(ctx.parsed.x)} (${fmt.number(gapData[ctx.dataIndex]?.records)} records)` } } },
       scales:{
-        x:{ ticks:{ color:'#8B8FA8', font:{size:10}, callback:v=>fmt.currency(v) }, grid:{color:'#1E2040'} },
-        y:{ ticks:{ color:'#8B8FA8', font:{size:11} }, grid:{display:false} }
+        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, callback:v=>fmt.currency(v) }, grid:{color:'#E9E9EA'} },
+        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{display:false} }
       }
     }
   }), [gapData]);
@@ -472,7 +599,7 @@ const ProductGaps = ({ rows, taxonomy }) => {
     <div className="tab-content">
       <div className="section-header">
         <div>
-          <h2 className="section-title">Product Gap Analysis</h2>
+          <h2 className="section-title">Product gap analysis</h2>
           <p className="section-sub">{gapData.length} parent gap categories — click any row to expand sub-category detail</p>
         </div>
         <select className="f-select" value={selectedAspect} onChange={e=>{setSelectedAspect(e.target.value);setExpandedIdx(null);}}>
@@ -482,7 +609,7 @@ const ProductGaps = ({ rows, taxonomy }) => {
 
       {gapData.length > 0 && (
         <div className="chart-card">
-          <div className="chart-title">Absolute Exposure by Parent Category — {selectedAspect}</div>
+          <div className="chart-title">Absolute exposure by parent category — {selectedAspect}</div>
           <ChartCanvas config={barChart} height={Math.max(180, gapData.length*36)} />
         </div>
       )}
@@ -491,12 +618,12 @@ const ProductGaps = ({ rows, taxonomy }) => {
         <table className="data-table">
           <thead><tr>
             <th style={{width:28}}></th>
-            <th>Parent Category</th>
+            <th>Parent category</th>
             <th className="r">Records</th>
-            <th className="r">% Records</th>
-            <th className="r">Abs Exposure</th>
-            <th className="r">Net Exposure</th>
-            <th className="r">Avg / Record</th>
+            <th className="r">% records</th>
+            <th className="r">Abs exposure</th>
+            <th className="r">Net exposure</th>
+            <th className="r">Avg / record</th>
             <th>Priority</th>
           </tr></thead>
           <tbody>
@@ -519,13 +646,13 @@ const ProductGaps = ({ rows, taxonomy }) => {
                     <tr key={`${gap.parent}-detail`}>
                       <td className="detail-td" colSpan={8}>
                         <div className="detail-panel">
-                          <div className="detail-sub-hdr">Sub-Category Breakdown</div>
+                          <div className="detail-sub-hdr">Sub-category breakdown</div>
                           <table className="sub-table">
                             <thead><tr>
-                              <th>Sub-Category Name</th><th>Code</th>
-                              <th className="r">Records</th><th className="r">% Parent</th>
-                              <th className="r">Abs Exposure</th><th className="r">Net Exposure</th>
-                              <th className="r">Avg / Record</th>
+                              <th>Sub-category name</th><th>Code</th>
+                              <th className="r">Records</th><th className="r">% parent</th>
+                              <th className="r">Abs exposure</th><th className="r">Net exposure</th>
+                              <th className="r">Avg / record</th>
                             </tr></thead>
                             <tbody>
                               {gap.subs.map(s=>(
@@ -609,8 +736,8 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
       data:{
         labels,
         datasets:[{
-          label: metric==='abs'?'Absolute Exposure':metric==='net'?'Net Exposure':'Record Volume',
-          data:values, borderColor:'#5B4FE8', backgroundColor:'#5B4FE820',
+          label: metric==='abs'?'Absolute exposure':metric==='net'?'Net exposure':'Record volume',
+          data:values, borderColor:'#5110DD', backgroundColor:'#5110DD18',
           borderWidth:2.5, pointRadius:4, pointHoverRadius:6, fill:true, tension:0.35
         }]
       },
@@ -618,11 +745,11 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
         responsive:true, maintainAspectRatio:false,
         plugins:{
           legend:{display:false},
-          tooltip:{ callbacks:{ label: ctx=>metric==='records'?`Volume: ${fmt.number(ctx.parsed.y)}`:`${metric==='abs'?'Abs':'Net'} Exposure: ${fmt.currencyFull(ctx.parsed.y)}` } }
+          tooltip:{ callbacks:{ label: ctx=>metric==='records'?`Volume: ${fmt.number(ctx.parsed.y)}`:`${metric==='abs'?'Abs':'Net'} exposure: ${fmt.currencyFull(ctx.parsed.y)}` } }
         },
         scales:{
-          x:{ ticks:{ color:'#8B8FA8', font:{size:11} }, grid:{color:'#1E2040'} },
-          y:{ ticks:{ color:'#8B8FA8', font:{size:11}, callback:v=>metric==='records'?fmt.number(v):fmt.currency(v) }, grid:{color:'#1E2040'} }
+          x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{color:'#E9E9EA'} },
+          y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11}, callback:v=>metric==='records'?fmt.number(v):fmt.currency(v) }, grid:{color:'#E9E9EA'} }
         }
       }
     };
@@ -638,14 +765,13 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
   }).reverse(), [monthlyData, metric]);
 
   const activeCount = Object.values(filters).filter(Boolean).length;
-
-  const METRICS = [['abs','Abs Exposure'],['net','Net Exposure'],['records','Volume']];
+  const METRICS = [['abs','Abs exposure'],['net','Net exposure'],['records','Volume']];
 
   return (
     <div className="tab-content">
       <div className="section-header">
         <div>
-          <h2 className="section-title">Trend Analysis</h2>
+          <h2 className="section-title">Trend analysis</h2>
           <p className="section-sub">{fmt.number(filtered.length)} records · {activeCount} filter{activeCount!==1?'s':''} active</p>
         </div>
         <div className="metric-toggle">
@@ -655,9 +781,9 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
 
       <div className="filter-panel">
         {[
-          ['primaryAspect','Primary Aspect',opts.primaryAspects,'All aspects'],
-          ['parentCat',    'Parent Category',opts.parentCats,   'All categories'],
-          ['subCat',       'Sub-Category',   opts.subCats,      'All sub-categories'],
+          ['primaryAspect','Primary aspect',opts.primaryAspects,'All aspects'],
+          ['parentCat',    'Parent category',opts.parentCats,   'All categories'],
+          ['subCat',       'Sub-category',   opts.subCats,      'All sub-categories'],
           ['territory',    'Territory',      opts.territories,  'All territories'],
           ['company',      'Company',        opts.companies,    'All companies'],
         ].map(([k,label,list,placeholder])=>(
@@ -678,7 +804,7 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
 
       <div className="chart-card">
         <div className="chart-title">
-          Month-over-Month Trend
+          Month-over-month trend
           {activeCount>0 && (
             <span style={{display:'flex',gap:6,flexWrap:'wrap'}}>
               {Object.entries(filters).filter(([,v])=>v).map(([k,v])=><span key={k} className="filter-tag">{v}</span>)}
@@ -693,13 +819,13 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
 
       {momRows.length > 1 && (
         <div className="chart-card">
-          <div className="chart-title">Month-over-Month Change Table</div>
+          <div className="chart-title">Month-over-month change table</div>
           <div className="table-wrap" style={{border:'none',borderRadius:0,marginBottom:0}}>
             <table className="data-table">
               <thead><tr>
                 <th>Month</th>
-                <th className="r">{metric==='records'?'Volume':metric==='abs'?'Abs Exposure':'Net Exposure'}</th>
-                <th className="r">MoM Change</th>
+                <th className="r">{metric==='records'?'Volume':metric==='abs'?'Abs exposure':'Net exposure'}</th>
+                <th className="r">MoM change</th>
                 <th className="r">MoM %</th>
               </tr></thead>
               <tbody>
@@ -747,14 +873,14 @@ const App = () => {
   if (state.error)   return <ErrorScreen msg={state.error} />;
 
   const { cleanedData: rows, taxonomy, meta } = state;
-  const TABS = [['overview','Overview'],['gaps','Product Gaps'],['trend','Trend Analysis']];
+  const TABS = [['overview','Overview'],['gaps','Product gaps'],['trend','Trend analysis']];
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-left">
-          <div className="logo">Variance Analysis Dashboard</div>
-          <div className="header-sub">Financial Adjustments Intelligence · {fmt.number(rows.length)} Records · Updated {meta.generatedAt ? new Date(meta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</div>
+          <div className="logo">Variance analysis dashboard</div>
+          <div className="header-sub">Financial adjustments intelligence · {fmt.number(rows.length)} records · Updated {meta.generatedAt ? new Date(meta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</div>
         </div>
         <nav className="tab-nav">
           {TABS.map(([id,label])=>(
