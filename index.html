@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Variance Analysis Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:     #0F0E17;
+  --bg2:    #1A1A2E;
+  --bg3:    #16213E;
+  --border: #252545;
+  --text:   #E8EDF5;
+  --text2:  #8B8FA8;
+  --purple: #5B4FE8;
+  --coral:  #E94560;
+  --teal:   #00C2A8;
+  --gold:   #F5A623;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:Arial,sans-serif;font-size:14px;line-height:1.5}
+button,select{font-family:inherit}
+
+/* ── Layout ── */
+.app{min-height:100vh;display:flex;flex-direction:column}
+.app-header{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:0 24px;height:64px;display:flex;align-items:center;
+  justify-content:space-between;position:sticky;top:0;z-index:100
+}
+.header-left{display:flex;flex-direction:column;gap:2px}
+.logo{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-0.01em}
+.header-sub{font-size:11px;color:var(--text2)}
+.app-main{flex:1;padding:24px;overflow-y:auto}
+.tab-content{max-width:1440px;margin:0 auto}
+
+/* ── Tabs ── */
+.tab-nav{display:flex;gap:4px}
+.tab-btn{
+  padding:7px 18px;border:none;background:transparent;
+  color:var(--text2);font-size:13px;cursor:pointer;
+  border-radius:6px;transition:all .15s;white-space:nowrap
+}
+.tab-btn:hover{background:var(--bg3);color:var(--text)}
+.tab-btn.active{background:var(--purple);color:#fff}
+
+/* ── KPI Cards ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px}
+.kpi-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.kpi-value{font-size:26px;font-weight:700;color:var(--text);line-height:1.1}
+.kpi-value.pos{color:var(--teal)}
+.kpi-value.neg{color:var(--coral)}
+.kpi-sub{font-size:11px;color:var(--text2);margin-top:4px}
+
+/* ── Peak Strip ── */
+.peak-strip{
+  display:flex;gap:0;background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;margin-bottom:20px;overflow:hidden
+}
+.peak-item{
+  flex:1;padding:12px 18px;display:flex;flex-direction:column;gap:3px;
+  border-right:1px solid var(--border)
+}
+.peak-item:last-child{border-right:none}
+.peak-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
+.peak-val{font-size:13px;font-weight:600;color:var(--text)}
+.peak-val.pos{color:var(--teal)}
+.peak-val.neg{color:var(--coral)}
+
+/* ── Charts ── */
+.charts-row{display:flex;gap:16px;margin-bottom:20px}
+@media(max-width:900px){.charts-row{flex-direction:column}}
+.chart-card{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:18px;margin-bottom:20px
+}
+.chart-title{
+  font-size:13px;font-weight:600;color:var(--text);
+  margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap
+}
+
+/* ── Section Headers ── */
+.section-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:16px;flex-wrap:wrap}
+.section-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:3px}
+.section-sub{font-size:12px;color:var(--text2)}
+
+/* ── Tables ── */
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-bottom:20px}
+table.data-table{width:100%;border-collapse:collapse;font-size:13px}
+table.data-table thead{background:var(--bg3)}
+table.data-table th{
+  padding:10px 14px;text-align:left;font-size:10px;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.06em;font-weight:500;white-space:nowrap
+}
+table.data-table th.r{text-align:right}
+table.data-table td{padding:10px 14px;border-top:1px solid var(--border);color:var(--text);white-space:nowrap}
+table.data-table td.r{text-align:right}
+table.data-table td.pos{color:var(--teal)}
+table.data-table td.neg{color:var(--coral)}
+.gap-row{cursor:pointer;transition:background .1s}
+.gap-row:hover,.gap-row.open{background:var(--bg3)}
+.expand-cell{color:var(--text2);font-size:10px;width:28px;padding-left:16px!important}
+.gap-name{font-weight:600}
+.priority-badge{
+  display:inline-block;padding:2px 10px;border-radius:12px;
+  font-size:11px;font-weight:600
+}
+.code-pill{
+  background:#5B4FE820;color:var(--purple);
+  padding:2px 8px;border-radius:4px;font-size:11px;font-family:monospace
+}
+
+/* ── Detail Panel ── */
+.detail-td{padding:0!important;border-top:none!important}
+.detail-panel{background:var(--bg);padding:16px 24px;border-top:1px solid var(--border)}
+.detail-sub-hdr{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+table.sub-table{width:100%;border-collapse:collapse;font-size:12px}
+table.sub-table th{padding:5px 12px;text-align:left;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+table.sub-table th.r{text-align:right}
+table.sub-table td{padding:6px 12px;border-top:1px solid var(--border);color:var(--text)}
+table.sub-table td.r{text-align:right}
+table.sub-table td.pos{color:var(--teal)}
+table.sub-table td.neg{color:var(--coral)}
+
+/* ── Filters ── */
+.filter-panel{
+  display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:14px 16px;margin-bottom:20px
+}
+.filter-group{display:flex;flex-direction:column;gap:4px;min-width:160px}
+.filter-group label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
+.f-select{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer;
+  appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238B8FA8'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;padding-right:28px
+}
+.f-select:focus{outline:none;border-color:var(--purple)}
+
+.metric-toggle{display:flex;gap:4px}
+.metric-btn{
+  padding:7px 14px;border:1px solid var(--border);background:var(--bg3);
+  color:var(--text2);border-radius:6px;font-size:12px;cursor:pointer;transition:all .15s
+}
+.metric-btn:hover{border-color:var(--purple);color:var(--text)}
+.metric-btn.active{background:var(--purple);border-color:var(--purple);color:#fff}
+
+.clear-btn{
+  padding:7px 14px;border:1px solid var(--coral);background:transparent;
+  color:var(--coral);border-radius:6px;font-size:12px;cursor:pointer
+}
+.clear-btn:hover{background:#E9456015}
+
+.filter-tag{background:#5B4FE825;color:var(--purple);padding:2px 8px;border-radius:10px;font-size:11px}
+.no-data{text-align:center;color:var(--text2);padding:48px;font-size:13px}
+
+/* ── Loading / Error ── */
+.center-screen{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err-title{color:var(--coral);font-size:18px;font-weight:600}
+.err-msg{color:var(--text2);font-size:13px;max-width:440px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ── CONFIG — replace with your deployed Apps Script URL ──────────────────────
+const APPS_SCRIPT_URL = 'YOUR_APPS_SCRIPT_URL_HERE';
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+const fmt = {
+  currency: n => {
+    const v = parseFloat(n) || 0;
+    const abs = Math.abs(v);
+    const sign = v < 0 ? '-' : '';
+    if (abs >= 1e6)  return `${sign}$${(abs/1e6).toFixed(2)}M`;
+    if (abs >= 1000) return `${sign}$${(abs/1000).toFixed(1)}K`;
+    return `${sign}$${abs.toFixed(0)}`;
+  },
+  currencyFull: n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(parseFloat(n)||0),
+  number: n => new Intl.NumberFormat('en-US').format(Math.round(parseFloat(n)||0)),
+  pct: n => `${(parseFloat(n)||0).toFixed(1)}%`,
+  month: d => d ? d.toLocaleDateString('en-US',{month:'short',year:"'yy"}) : '',
+  monthFull: d => d ? d.toLocaleDateString('en-US',{month:'short',year:'numeric'}) : ''
+};
+
+const parseMonth = m => {
+  if (!m) return null;
+  if (m instanceof Date) return m;
+  if (typeof m === 'number') return new Date(Math.round((m-25569)*86400*1000));
+  const d = new Date(m);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const monthKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '';
+
+const CHART_COLORS = ['#5B4FE8','#E94560','#00C2A8','#F5A623','#4ECDC4','#FF6B6B','#A8DADC','#F38181','#95E1D3','#457B9D','#E63946','#2A9D8F'];
+
+const PRIORITY_CONF = {
+  Critical: { color:'#E94560', bg:'#E9456020' },
+  High:     { color:'#F5A623', bg:'#F5A62320' },
+  Medium:   { color:'#5B4FE8', bg:'#5B4FE820' },
+  Low:      { color:'#00C2A8', bg:'#00C2A820' }
+};
+
+const getPriority = (abs, records) => {
+  if (abs >= 150000 || records >= 400) return 'Critical';
+  if (abs >= 50000  || records >= 150) return 'High';
+  if (abs >= 15000  || records >= 50)  return 'Medium';
+  return 'Low';
+};
+
+// ── Reusable Chart Canvas ────────────────────────────────────────────────────
+const ChartCanvas = ({ config, height = 240 }) => {
+  const ref  = useRef(null);
+  const inst = useRef(null);
+  useEffect(() => {
+    if (!ref.current || !config) return;
+    if (inst.current) { inst.current.destroy(); inst.current = null; }
+    inst.current = new Chart(ref.current, config);
+    return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+  }, [config]);
+  return <canvas ref={ref} style={{height:`${height}px`,maxHeight:`${height}px`}} />;
+};
+
+// ── Loading / Error ──────────────────────────────────────────────────────────
+const LoadingScreen = () => (
+  <div className="center-screen">
+    <div className="spinner" />
+    <p style={{color:'var(--text2)',fontSize:'13px'}}>Loading dashboard data…</p>
+  </div>
+);
+
+const ErrorScreen = ({ msg }) => (
+  <div className="center-screen">
+    <div className="err-title">Failed to load data</div>
+    <div className="err-msg">{msg}</div>
+    <div className="err-msg" style={{marginTop:8,fontSize:12}}>
+      Make sure APPS_SCRIPT_URL is set correctly in index.html and the script is deployed as a Web App accessible to "Anyone".
+    </div>
+  </div>
+);
+
+// ── KPI Card ─────────────────────────────────────────────────────────────────
+const KPICard = ({ label, value, sub, sign }) => (
+  <div className="kpi-card">
+    <div className="kpi-label">{label}</div>
+    <div className={`kpi-value${sign==='pos'?' pos':sign==='neg'?' neg':''}`}>{value}</div>
+    {sub && <div className="kpi-sub">{sub}</div>}
+  </div>
+);
+
+// ── TAB 1: OVERVIEW ──────────────────────────────────────────────────────────
+const Overview = ({ rows }) => {
+  const stats = useMemo(() => {
+    const months = {}, aspects = {};
+    let totalAbs = 0, totalNet = 0;
+    const companies = new Set(), employees = new Set();
+
+    rows.forEach(r => {
+      const adj = parseFloat(r.ADJUSTMENT_USD) || 0;
+      const abs = parseFloat(r.ABS_ADJUSTMENT_USD) || Math.abs(adj);
+      const d   = parseMonth(r.MONTH);
+      const mk  = monthKey(d);
+
+      totalAbs += abs; totalNet += adj;
+      if (r.CO_ID)  companies.add(r.CO_ID);
+      if (r.EE_ID)  employees.add(r.EE_ID);
+
+      if (mk) {
+        if (!months[mk]) months[mk] = { key:mk, date:d, records:0, net:0, abs:0 };
+        months[mk].records++; months[mk].net += adj; months[mk].abs += abs;
+      }
+      const pa = r.PRIMARY_ASPECT || 'Unknown';
+      if (!aspects[pa]) aspects[pa] = { records:0, abs:0, net:0 };
+      aspects[pa].records++; aspects[pa].abs += abs; aspects[pa].net += adj;
+    });
+
+    const sortedMonths = Object.values(months).sort((a,b) => a.key.localeCompare(b.key));
+    const peakVol = sortedMonths.reduce((m,c) => c.records>(m?.records||0)?c:m, null);
+    const peakExp = sortedMonths.reduce((m,c) => c.abs>(m?.abs||0)?c:m, null);
+    const last2   = sortedMonths.slice(-2);
+    const momRec  = last2.length===2 ? ((last2[1].records-last2[0].records)/Math.max(last2[0].records,1)*100) : 0;
+    const momExp  = last2.length===2 ? ((last2[1].abs-last2[0].abs)/Math.max(last2[0].abs,1)*100) : 0;
+    const latestMonth = sortedMonths[sortedMonths.length-1];
+
+    return { sortedMonths, aspects, totalAbs, totalNet, companies:companies.size, employees:employees.size, peakVol, peakExp, momRec, momExp, latestMonth };
+  }, [rows]);
+
+  const monthlyChartCfg = useMemo(() => ({
+    type:'bar',
+    data:{
+      labels: stats.sortedMonths.map(m=>fmt.month(m.date)),
+      datasets:[
+        { label:'Records', data:stats.sortedMonths.map(m=>m.records), backgroundColor:'#5B4FE880', borderColor:'#5B4FE8', borderWidth:1, yAxisID:'y', order:2 },
+        { label:'Abs Exposure ($)', data:stats.sortedMonths.map(m=>m.abs), type:'line', borderColor:'#E94560', backgroundColor:'#E9456015', borderWidth:2, pointRadius:3, fill:true, yAxisID:'y1', order:1, tension:0.3 }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ labels:{ color:'#8B8FA8', font:{ size:11 } } },
+        tooltip:{ callbacks:{ label: ctx => ctx.datasetIndex===0 ? `Records: ${ctx.parsed.y}` : `Exposure: ${fmt.currencyFull(ctx.parsed.y)}` } }
+      },
+      scales:{
+        x:{ ticks:{ color:'#8B8FA8', font:{ size:10 } }, grid:{ color:'#1E2040' } },
+        y:{ ticks:{ color:'#8B8FA8', font:{ size:10 } }, grid:{ color:'#1E2040' }, title:{ display:true, text:'Records', color:'#8B8FA8', font:{ size:10 } } },
+        y1:{ position:'right', ticks:{ color:'#8B8FA8', font:{ size:10 }, callback:v=>fmt.currency(v) }, grid:{ display:false } }
+      }
+    }
+  }), [stats]);
+
+  const donutCfg = useMemo(() => {
+    const labels = Object.keys(stats.aspects).sort((a,b)=>stats.aspects[b].records-stats.aspects[a].records);
+    return {
+      type:'doughnut',
+      data:{
+        labels,
+        datasets:[{ data:labels.map(k=>stats.aspects[k].records), backgroundColor:CHART_COLORS.slice(0,labels.length), borderWidth:0 }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'right', labels:{ color:'#8B8FA8', font:{ size:11 }, padding:10, boxWidth:12 } } }
+      }
+    };
+  }, [stats]);
+
+  const { totalAbs, totalNet, companies, employees, peakVol, peakExp, momRec, momExp, latestMonth } = stats;
+
+  return (
+    <div className="tab-content">
+      <div className="kpi-grid">
+        <KPICard label="Total Records"      value={fmt.number(rows.length)} sub="All adjustments" />
+        <KPICard label="Absolute Exposure"  value={fmt.currency(totalAbs)} sub="Total financial magnitude" />
+        <KPICard label="Net Exposure"       value={fmt.currency(totalNet)} sign={totalNet>=0?'pos':'neg'} />
+        <KPICard label="Avg per Adjustment" value={fmt.currency(rows.length?totalAbs/rows.length:0)} />
+        <KPICard label="Unique Companies"   value={fmt.number(companies)} />
+        <KPICard label="Unique Employees"   value={fmt.number(employees)} />
+      </div>
+
+      <div className="peak-strip">
+        {peakVol  && <div className="peak-item"><span className="peak-label">Peak Month (Volume)</span><span className="peak-val">{fmt.monthFull(peakVol.date)} — {fmt.number(peakVol.records)} records</span></div>}
+        {peakExp  && <div className="peak-item"><span className="peak-label">Peak Month (Exposure)</span><span className="peak-val">{fmt.monthFull(peakExp.date)} — {fmt.currency(peakExp.abs)}</span></div>}
+        {latestMonth && <div className="peak-item"><span className="peak-label">Latest Month Records</span><span className="peak-val">{fmt.number(latestMonth.records)}</span></div>}
+        <div className="peak-item"><span className="peak-label">MoM Volume</span><span className={`peak-val ${momRec>0?'neg':momRec<0?'pos':''}`}>{momRec>0?'+':''}{momRec.toFixed(1)}%</span></div>
+        <div className="peak-item"><span className="peak-label">MoM Exposure</span><span className={`peak-val ${momExp>0?'neg':momExp<0?'pos':''}`}>{momExp>0?'+':''}{momExp.toFixed(1)}%</span></div>
+      </div>
+
+      <div className="charts-row">
+        <div className="chart-card" style={{flex:2}}>
+          <div className="chart-title">Monthly Volume &amp; Absolute Exposure Trend</div>
+          <ChartCanvas config={monthlyChartCfg} height={240} />
+        </div>
+        <div className="chart-card" style={{flex:1}}>
+          <div className="chart-title">Records by Primary Aspect</div>
+          <ChartCanvas config={donutCfg} height={240} />
+        </div>
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-title">Absolute Exposure by Primary Aspect</div>
+        <div className="table-wrap" style={{marginBottom:0,border:'none',borderRadius:0}}>
+          <table className="data-table">
+            <thead><tr>
+              <th>Primary Aspect</th>
+              <th className="r">Records</th>
+              <th className="r">% of Total</th>
+              <th className="r">Absolute Exposure</th>
+              <th className="r">Net Exposure</th>
+              <th className="r">Avg / Record</th>
+            </tr></thead>
+            <tbody>
+              {Object.entries(stats.aspects).sort((a,b)=>b[1].abs-a[1].abs).map(([pa,d])=>(
+                <tr key={pa}>
+                  <td>{pa}</td>
+                  <td className="r">{fmt.number(d.records)}</td>
+                  <td className="r">{fmt.pct(rows.length?d.records/rows.length*100:0)}</td>
+                  <td className="r">{fmt.currency(d.abs)}</td>
+                  <td className={`r ${d.net<0?'neg':'pos'}`}>{fmt.currency(d.net)}</td>
+                  <td className="r">{fmt.currency(d.records?d.abs/d.records:0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── TAB 2: PRODUCT GAPS ──────────────────────────────────────────────────────
+const ProductGaps = ({ rows, taxonomy }) => {
+  const [selectedAspect, setSelectedAspect] = useState('Calculator inaccuracy');
+  const [expandedIdx, setExpandedIdx]       = useState(null);
+
+  const aspects  = useMemo(() => [...new Set(rows.map(r=>r.PRIMARY_ASPECT).filter(Boolean))].sort(), [rows]);
+  const taxLookup = useMemo(() => {
+    const m = {};
+    taxonomy.forEach(t => { if (t['Sub-Category Code']) m[t['Sub-Category Code']] = t; });
+    return m;
+  }, [taxonomy]);
+
+  const { gapData, totalRecords, totalAbs } = useMemo(() => {
+    const filtered  = rows.filter(r=>r.PRIMARY_ASPECT===selectedAspect);
+    const totalRecords = filtered.length;
+    const totalAbs  = filtered.reduce((s,r)=>s+(Math.abs(parseFloat(r.ADJUSTMENT_USD))||0),0);
+    const parents   = {};
+
+    filtered.forEach(r => {
+      const tax    = taxLookup[r.SUB_CAT_CODE] || {};
+      const parent = tax['Parent Category'] || 'Unclassified';
+      const sub    = tax['Sub-Category Name'] || r.SUB_CAT_CODE || 'Unknown';
+      const adj    = parseFloat(r.ADJUSTMENT_USD) || 0;
+      const abs    = Math.abs(adj);
+
+      if (!parents[parent]) parents[parent] = { parent, records:0, net:0, abs:0, subs:{} };
+      parents[parent].records++; parents[parent].net+=adj; parents[parent].abs+=abs;
+
+      if (!parents[parent].subs[sub]) parents[parent].subs[sub]={name:sub, code:r.SUB_CAT_CODE, records:0, net:0, abs:0};
+      parents[parent].subs[sub].records++; parents[parent].subs[sub].net+=adj; parents[parent].subs[sub].abs+=abs;
+    });
+
+    const gapData = Object.values(parents)
+      .sort((a,b)=>b.abs-a.abs)
+      .map((p,i)=>({
+        ...p, idx:i,
+        pctRec: totalRecords ? p.records/totalRecords*100 : 0,
+        pctAbs: totalAbs    ? p.abs/totalAbs*100           : 0,
+        avg:    p.records   ? p.abs/p.records              : 0,
+        priority: getPriority(p.abs, p.records),
+        subs: Object.values(p.subs).sort((a,b)=>b.abs-a.abs)
+      }));
+
+    return { gapData, totalRecords, totalAbs };
+  }, [rows, selectedAspect, taxLookup]);
+
+  const barChart = useMemo(() => ({
+    type:'bar',
+    data:{
+      labels: gapData.map(g=>g.parent.length>30?g.parent.slice(0,28)+'…':g.parent),
+      datasets:[{ label:'Absolute Exposure', data:gapData.map(g=>g.abs), backgroundColor:CHART_COLORS.slice(0,gapData.length), borderWidth:0, borderRadius:4 }]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>`${fmt.currencyFull(ctx.parsed.x)} (${fmt.number(gapData[ctx.dataIndex]?.records)} records)` } } },
+      scales:{
+        x:{ ticks:{ color:'#8B8FA8', font:{size:10}, callback:v=>fmt.currency(v) }, grid:{color:'#1E2040'} },
+        y:{ ticks:{ color:'#8B8FA8', font:{size:11} }, grid:{display:false} }
+      }
+    }
+  }), [gapData]);
+
+  return (
+    <div className="tab-content">
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Product Gap Analysis</h2>
+          <p className="section-sub">{gapData.length} parent gap categories — click any row to expand sub-category detail</p>
+        </div>
+        <select className="f-select" value={selectedAspect} onChange={e=>{setSelectedAspect(e.target.value);setExpandedIdx(null);}}>
+          {aspects.map(a=><option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
+
+      {gapData.length > 0 && (
+        <div className="chart-card">
+          <div className="chart-title">Absolute Exposure by Parent Category — {selectedAspect}</div>
+          <ChartCanvas config={barChart} height={Math.max(180, gapData.length*36)} />
+        </div>
+      )}
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead><tr>
+            <th style={{width:28}}></th>
+            <th>Parent Category</th>
+            <th className="r">Records</th>
+            <th className="r">% Records</th>
+            <th className="r">Abs Exposure</th>
+            <th className="r">Net Exposure</th>
+            <th className="r">Avg / Record</th>
+            <th>Priority</th>
+          </tr></thead>
+          <tbody>
+            {gapData.map((gap,i) => {
+              const pc = PRIORITY_CONF[gap.priority];
+              const isOpen = expandedIdx === i;
+              return (
+                <React.Fragment key={gap.parent}>
+                  <tr className={`gap-row${isOpen?' open':''}`} onClick={()=>setExpandedIdx(isOpen?null:i)}>
+                    <td className="expand-cell">{isOpen?'▼':'▶'}</td>
+                    <td className="gap-name">{gap.parent}</td>
+                    <td className="r">{fmt.number(gap.records)}</td>
+                    <td className="r">{fmt.pct(gap.pctRec)}</td>
+                    <td className="r">{fmt.currency(gap.abs)}</td>
+                    <td className={`r ${gap.net<0?'neg':'pos'}`}>{fmt.currency(gap.net)}</td>
+                    <td className="r">{fmt.currency(gap.avg)}</td>
+                    <td><span className="priority-badge" style={{background:pc.bg,color:pc.color}}>{gap.priority}</span></td>
+                  </tr>
+                  {isOpen && (
+                    <tr key={`${gap.parent}-detail`}>
+                      <td className="detail-td" colSpan={8}>
+                        <div className="detail-panel">
+                          <div className="detail-sub-hdr">Sub-Category Breakdown</div>
+                          <table className="sub-table">
+                            <thead><tr>
+                              <th>Sub-Category Name</th><th>Code</th>
+                              <th className="r">Records</th><th className="r">% Parent</th>
+                              <th className="r">Abs Exposure</th><th className="r">Net Exposure</th>
+                              <th className="r">Avg / Record</th>
+                            </tr></thead>
+                            <tbody>
+                              {gap.subs.map(s=>(
+                                <tr key={s.code}>
+                                  <td>{s.name}</td>
+                                  <td><code className="code-pill">{s.code}</code></td>
+                                  <td className="r">{fmt.number(s.records)}</td>
+                                  <td className="r">{fmt.pct(gap.records?s.records/gap.records*100:0)}</td>
+                                  <td className="r">{fmt.currency(s.abs)}</td>
+                                  <td className={`r ${s.net<0?'neg':'pos'}`}>{fmt.currency(s.net)}</td>
+                                  <td className="r">{fmt.currency(s.records?s.abs/s.records:0)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ── TAB 3: TREND ANALYSIS ────────────────────────────────────────────────────
+const TrendAnalysis = ({ rows, taxonomy }) => {
+  const [filters, setFilters] = useState({ primaryAspect:'', parentCat:'', subCat:'', territory:'', company:'' });
+  const [metric, setMetric]   = useState('abs');
+
+  const taxLookup = useMemo(() => {
+    const m = {};
+    taxonomy.forEach(t => { if (t['Sub-Category Code']) m[t['Sub-Category Code']] = t; });
+    return m;
+  }, [taxonomy]);
+
+  const opts = useMemo(() => ({
+    primaryAspects: [...new Set(rows.map(r=>r.PRIMARY_ASPECT).filter(Boolean))].sort(),
+    parentCats:     [...new Set(taxonomy.map(t=>t['Parent Category']).filter(Boolean))].sort(),
+    subCats:        [...new Set(taxonomy.map(t=>t['Sub-Category Code']).filter(Boolean))].sort(),
+    territories:    [...new Set(rows.map(r=>r.TERRITORY).filter(Boolean))].sort(),
+    companies:      [...new Set(rows.map(r=>r.COMPANY||r.CO_ID).filter(Boolean))].sort(),
+  }), [rows, taxonomy]);
+
+  const setF = (k,v) => setFilters(f=>({...f,[k]:v}));
+
+  const filtered = useMemo(() => rows.filter(r => {
+    const tax = taxLookup[r.SUB_CAT_CODE] || {};
+    if (filters.primaryAspect && r.PRIMARY_ASPECT !== filters.primaryAspect) return false;
+    if (filters.parentCat     && tax['Parent Category'] !== filters.parentCat) return false;
+    if (filters.subCat        && r.SUB_CAT_CODE !== filters.subCat) return false;
+    if (filters.territory     && r.TERRITORY !== filters.territory) return false;
+    if (filters.company       && (r.COMPANY||r.CO_ID) !== filters.company) return false;
+    return true;
+  }), [rows, filters, taxLookup]);
+
+  const monthlyData = useMemo(() => {
+    const months = {};
+    filtered.forEach(r => {
+      const d  = parseMonth(r.MONTH);
+      const mk = monthKey(d);
+      if (!mk) return;
+      if (!months[mk]) months[mk] = { key:mk, date:d, records:0, net:0, abs:0 };
+      const adj = parseFloat(r.ADJUSTMENT_USD) || 0;
+      months[mk].records++; months[mk].net+=adj; months[mk].abs+=Math.abs(adj);
+    });
+    return Object.values(months).sort((a,b)=>a.key.localeCompare(b.key));
+  }, [filtered]);
+
+  const metricVal = m => metric==='abs' ? m.abs : metric==='net' ? m.net : m.records;
+
+  const trendCfg = useMemo(() => {
+    const labels = monthlyData.map(m=>fmt.month(m.date));
+    const values = monthlyData.map(metricVal);
+    return {
+      type:'line',
+      data:{
+        labels,
+        datasets:[{
+          label: metric==='abs'?'Absolute Exposure':metric==='net'?'Net Exposure':'Record Volume',
+          data:values, borderColor:'#5B4FE8', backgroundColor:'#5B4FE820',
+          borderWidth:2.5, pointRadius:4, pointHoverRadius:6, fill:true, tension:0.35
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{ callbacks:{ label: ctx=>metric==='records'?`Volume: ${fmt.number(ctx.parsed.y)}`:`${metric==='abs'?'Abs':'Net'} Exposure: ${fmt.currencyFull(ctx.parsed.y)}` } }
+        },
+        scales:{
+          x:{ ticks:{ color:'#8B8FA8', font:{size:11} }, grid:{color:'#1E2040'} },
+          y:{ ticks:{ color:'#8B8FA8', font:{size:11}, callback:v=>metric==='records'?fmt.number(v):fmt.currency(v) }, grid:{color:'#1E2040'} }
+        }
+      }
+    };
+  }, [monthlyData, metric]);
+
+  const momRows = useMemo(() => monthlyData.map((m,i) => {
+    const prev   = monthlyData[i-1];
+    const val    = metricVal(m);
+    const prevV  = prev ? metricVal(prev) : null;
+    const change = prevV !== null ? val - prevV : null;
+    const pct    = prevV !== null && prevV !== 0 ? change/Math.abs(prevV)*100 : null;
+    return { date:m.date, val, change, pct };
+  }).reverse(), [monthlyData, metric]);
+
+  const activeCount = Object.values(filters).filter(Boolean).length;
+
+  const METRICS = [['abs','Abs Exposure'],['net','Net Exposure'],['records','Volume']];
+
+  return (
+    <div className="tab-content">
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Trend Analysis</h2>
+          <p className="section-sub">{fmt.number(filtered.length)} records · {activeCount} filter{activeCount!==1?'s':''} active</p>
+        </div>
+        <div className="metric-toggle">
+          {METRICS.map(([k,l])=><button key={k} className={`metric-btn${metric===k?' active':''}`} onClick={()=>setMetric(k)}>{l}</button>)}
+        </div>
+      </div>
+
+      <div className="filter-panel">
+        {[
+          ['primaryAspect','Primary Aspect',opts.primaryAspects,'All aspects'],
+          ['parentCat',    'Parent Category',opts.parentCats,   'All categories'],
+          ['subCat',       'Sub-Category',   opts.subCats,      'All sub-categories'],
+          ['territory',    'Territory',      opts.territories,  'All territories'],
+          ['company',      'Company',        opts.companies,    'All companies'],
+        ].map(([k,label,list,placeholder])=>(
+          <div className="filter-group" key={k}>
+            <label>{label}</label>
+            <select className="f-select" value={filters[k]} onChange={e=>setF(k,e.target.value)}>
+              <option value="">{placeholder}</option>
+              {list.map(a=><option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+        ))}
+        {activeCount>0 && (
+          <button className="clear-btn" onClick={()=>setFilters({primaryAspect:'',parentCat:'',subCat:'',territory:'',company:''})}>
+            Clear all
+          </button>
+        )}
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-title">
+          Month-over-Month Trend
+          {activeCount>0 && (
+            <span style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {Object.entries(filters).filter(([,v])=>v).map(([k,v])=><span key={k} className="filter-tag">{v}</span>)}
+            </span>
+          )}
+        </div>
+        {monthlyData.length > 0
+          ? <ChartCanvas config={trendCfg} height={260} />
+          : <div className="no-data">No data matches the selected filters</div>
+        }
+      </div>
+
+      {momRows.length > 1 && (
+        <div className="chart-card">
+          <div className="chart-title">Month-over-Month Change Table</div>
+          <div className="table-wrap" style={{border:'none',borderRadius:0,marginBottom:0}}>
+            <table className="data-table">
+              <thead><tr>
+                <th>Month</th>
+                <th className="r">{metric==='records'?'Volume':metric==='abs'?'Abs Exposure':'Net Exposure'}</th>
+                <th className="r">MoM Change</th>
+                <th className="r">MoM %</th>
+              </tr></thead>
+              <tbody>
+                {momRows.map((m,i)=>(
+                  <tr key={i}>
+                    <td>{fmt.monthFull(m.date)}</td>
+                    <td className="r">{metric==='records'?fmt.number(m.val):fmt.currency(m.val)}</td>
+                    <td className={`r${m.change===null?'':m.change>0?' neg':' pos'}`}>
+                      {m.change===null?'—':`${m.change>0?'+':''}${metric==='records'?fmt.number(m.change):fmt.currency(m.change)}`}
+                    </td>
+                    <td className={`r${m.pct===null?'':m.pct>0?' neg':' pos'}`}>
+                      {m.pct===null?'—':`${m.pct>0?'+':''}${m.pct.toFixed(1)}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── APP ROOT ─────────────────────────────────────────────────────────────────
+const App = () => {
+  const [state, setState]     = useState({ loading:true, error:null, cleanedData:[], taxonomy:[], meta:{} });
+  const [activeTab, setTab]   = useState('overview');
+
+  useEffect(() => {
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+      setState({ loading:false, error:'APPS_SCRIPT_URL is not configured. Open index.html and replace YOUR_APPS_SCRIPT_URL_HERE with your deployed Apps Script URL.', cleanedData:[], taxonomy:[], meta:{} });
+      return;
+    }
+    fetch(APPS_SCRIPT_URL)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        setState({ loading:false, error:null, cleanedData:d.cleanedData||[], taxonomy:d.taxonomy||[], meta:d.meta||{} });
+      })
+      .catch(err => setState(s=>({...s, loading:false, error:err.message})));
+  }, []);
+
+  if (state.loading) return <LoadingScreen />;
+  if (state.error)   return <ErrorScreen msg={state.error} />;
+
+  const { cleanedData: rows, taxonomy, meta } = state;
+  const TABS = [['overview','Overview'],['gaps','Product Gaps'],['trend','Trend Analysis']];
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <div className="header-left">
+          <div className="logo">Variance Analysis Dashboard</div>
+          <div className="header-sub">Financial Adjustments Intelligence · {fmt.number(rows.length)} Records · Updated {meta.generatedAt ? new Date(meta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</div>
+        </div>
+        <nav className="tab-nav">
+          {TABS.map(([id,label])=>(
+            <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
+          ))}
+        </nav>
+      </header>
+
+      <main className="app-main">
+        {activeTab==='overview' && <Overview rows={rows} taxonomy={taxonomy} />}
+        {activeTab==='gaps'     && <ProductGaps rows={rows} taxonomy={taxonomy} />}
+        {activeTab==='trend'    && <TrendAnalysis rows={rows} taxonomy={taxonomy} />}
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
