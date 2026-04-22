@@ -189,8 +189,16 @@ const fmt = {
   currencyFull: n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(parseFloat(n)||0),
   number: n => new Intl.NumberFormat('en-US').format(Math.round(parseFloat(n)||0)),
   pct: n => `${(parseFloat(n)||0).toFixed(1)}%`,
-  month: d => d ? d.toLocaleDateString('en-US',{month:'short',year:"'yy"}) : '',
-  monthFull: d => d ? d.toLocaleDateString('en-US',{month:'short',year:'numeric'}) : ''
+month: d => {
+    if (!d) return '';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+  },
+  monthFull: d => {
+    if (!d) return '';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[d.getMonth()]} ${d.getFullYear()}`;
+  },
 };
 
 const parseMonth = m => {
