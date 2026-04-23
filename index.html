@@ -1403,7 +1403,7 @@ const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
         </button>
       </div>
       <nav className="sidebar-nav">
-        <button className="nav-item" style={{marginBottom:'4px'}}>
+        <button className={`nav-item${activeDash==='home'?' active':''}`} onClick={()=>onDashChange('home')} style={{marginBottom:'4px'}}>
           <span className="nav-icon"><IconHome /></span>
           {open && <span className="nav-label">Home</span>}
         </button>
@@ -1460,6 +1460,204 @@ const CoverageBanner = ({ rawCount, cleanedCount }) => {
   );
 };
 
+// ── Home Page ────────────────────────────────────────────────────────────────────────────────
+const HomePage = ({ onNavigate }) => {
+  const TOOLS = [
+    {
+      id:    'finance',
+      label: 'Finance adjustments',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+        </svg>
+      ),
+      desc:  'Analyse payroll adjustment variances by primary aspect, sub-category, territory and company. Drill into monthly trends and identify product gaps.',
+      status:'live',
+      color: 'var(--color-primary-main)',
+      bg:    '#5110DD10',
+    },
+    {
+      id:    'arr',
+      label: 'ARR',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+      ),
+      desc:  'Track monthly ARR by sub-category, monitor churn and pipeline conversion, and view expansion and contraction across the portfolio.',
+      status:'live',
+      color: '#0F6E56',
+      bg:    '#0F6E5610',
+    },
+    {
+      id:    'hr',
+      label: 'HR analytics',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      ),
+      desc:  'Headcount trends, attrition analysis and workforce planning across all Playroll entities and territories.',
+      status:'soon',
+      color: '#BA7517',
+      bg:    '#BA751710',
+    },
+    {
+      id:    'ops',
+      label: 'Operations',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      ),
+      desc:  'Payroll processing SLAs, provider performance benchmarks and operational health metrics.',
+      status:'soon',
+      color: '#6B7280',
+      bg:    '#6B728010',
+    },
+  ];
+
+  const STATUS = {
+    live: { label:'Live',         color:'var(--color-success-main)',   bg:'#66BB6A15', border:'#66BB6A40' },
+    soon: { label:'Coming soon',  color:'var(--color-warning-main)',   bg:'#FFA72615', border:'#FFA72640' },
+    beta: { label:'Beta',         color:'var(--color-primary-light)',  bg:'#AF91EF15', border:'#AF91EF40' },
+  };
+
+  return (
+    <div className="tab-content" style={{maxWidth:'1100px'}}>
+
+      {/* Hero */}
+      <div style={{
+        background:'linear-gradient(135deg, #5110DD18 0%, #36B1FF10 100%)',
+        border:'1px solid #5110DD20',
+        borderRadius:'var(--radius)',
+        padding:'40px 48px',
+        marginBottom:'32px',
+        position:'relative',
+        overflow:'hidden',
+      }}>
+        {/* Decorative circles */}
+        <div style={{position:'absolute',top:'-40px',right:'-40px',width:'200px',height:'200px',borderRadius:'50%',background:'#5110DD08',pointerEvents:'none'}} />
+        <div style={{position:'absolute',bottom:'-60px',right:'120px',width:'160px',height:'160px',borderRadius:'50%',background:'#36B1FF08',pointerEvents:'none'}} />
+
+        {/* Beta badge */}
+        <div style={{
+          display:'inline-flex',alignItems:'center',gap:'6px',
+          background:'#AF91EF20',border:'1px solid #AF91EF50',
+          borderRadius:'var(--radius-chip)',
+          padding:'4px 12px',marginBottom:'16px',
+        }}>
+          <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'var(--color-primary-light)',display:'inline-block',animation:'pulse 2s infinite'}} />
+          <span style={{fontSize:'0.6875rem',fontWeight:600,color:'var(--color-primary-light)',letterSpacing:'.04em'}}>BETA — UNDER ACTIVE DEVELOPMENT</span>
+        </div>
+
+        <h1 style={{fontSize:'1.75rem',fontWeight:700,color:'var(--text-primary)',marginBottom:'10px',letterSpacing:'-0.02em',lineHeight:1.2}}>
+          Playroll Internal Analytics
+        </h1>
+        <p style={{fontSize:'0.9375rem',color:'var(--text-secondary)',maxWidth:'540px',lineHeight:1.65,marginBottom:'24px'}}>
+          A single place to understand financial adjustments, ARR trends, and operational performance across the Playroll portfolio. Built for the internal team.
+        </p>
+
+        {/* Under construction notice */}
+        <div style={{
+          display:'inline-flex',alignItems:'flex-start',gap:'10px',
+          background:'#FFA72610',border:'1px solid #FFA72640',
+          borderRadius:'var(--radius-sm)',padding:'10px 16px',
+          maxWidth:'560px',
+        }}>
+          <span style={{fontSize:'16px',flexShrink:0,marginTop:'1px'}}>🚧</span>
+          <div>
+            <div style={{fontSize:'0.8125rem',fontWeight:600,color:'#BA7517',marginBottom:'3px'}}>Under construction</div>
+            <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',lineHeight:1.5}}>
+              This tool is in active development. Data, layouts and features may change. If you spot an issue or have a request, reach out to the analytics team.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tool cards */}
+      <div style={{marginBottom:'12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <h2 style={{fontSize:'0.875rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'.06em'}}>Available dashboards</h2>
+        <span style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>{TOOLS.filter(t=>t.status==='live').length} of {TOOLS.length} live</span>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'14px',marginBottom:'40px'}}>
+        {TOOLS.map(tool => {
+          const st = STATUS[tool.status];
+          const isLive = tool.status === 'live';
+          return (
+            <div
+              key={tool.id}
+              onClick={() => isLive && onNavigate(tool.id)}
+              style={{
+                background:'var(--bg-paper)',
+                border:`1px solid ${isLive ? 'var(--container-outline-variant)' : 'var(--surface-high)'}`,
+                borderRadius:'var(--radius)',
+                padding:'22px 24px',
+                cursor: isLive ? 'pointer' : 'default',
+                transition:'all .18s',
+                opacity: isLive ? 1 : 0.7,
+                boxShadow: 'var(--shadow-elevation)',
+                position:'relative',
+                overflow:'hidden',
+              }}
+              onMouseEnter={e => { if(isLive) { e.currentTarget.style.borderColor='var(--color-primary-main)'; e.currentTarget.style.boxShadow='0 4px 16px rgba(81,16,221,0.12)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor=isLive?'var(--container-outline-variant)':'var(--surface-high)'; e.currentTarget.style.boxShadow='var(--shadow-elevation)'; }}
+            >
+              {/* Top accent */}
+              <div style={{position:'absolute',top:0,left:0,right:0,height:'3px',background:isLive?tool.color:'var(--surface-high)',borderRadius:'var(--radius) var(--radius) 0 0'}} />
+
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'14px',paddingTop:'4px'}}>
+                <div style={{
+                  width:'48px',height:'48px',borderRadius:'12px',
+                  background: tool.bg, color: tool.color,
+                  display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
+                }}>
+                  {tool.icon}
+                </div>
+                <span style={{
+                  fontSize:'0.625rem',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',
+                  padding:'3px 10px',borderRadius:'var(--radius-chip)',
+                  background:st.bg, color:st.color, border:`1px solid ${st.border}`,
+                }}>
+                  {st.label}
+                </span>
+              </div>
+
+              <div style={{fontSize:'0.9375rem',fontWeight:600,color:'var(--text-primary)',marginBottom:'6px'}}>{tool.label}</div>
+              <div style={{fontSize:'0.8125rem',color:'var(--text-secondary)',lineHeight:1.55}}>{tool.desc}</div>
+
+              {isLive && (
+                <div style={{marginTop:'16px',fontSize:'0.75rem',fontWeight:600,color:'var(--color-primary-main)',display:'flex',alignItems:'center',gap:'4px'}}>
+                  Open dashboard
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        borderTop:'1px solid var(--surface-high)',
+        paddingTop:'20px',
+        display:'flex',alignItems:'center',justifyContent:'space-between',
+        flexWrap:'wrap',gap:'10px',
+      }}>
+        <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
+          Playroll Internal Analytics · Beta v0.1 · For internal use only
+        </div>
+        <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
+          Data refreshes when the page is reloaded
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
 // ── Skeleton loader ──────────────────────────────────────────────────────────
 const SkeletonBlock = ({ h='16px', w='100%', mb='8px', radius='6px' }) => (
   <div style={{height:h, width:w, borderRadius:radius, marginBottom:mb,
@@ -1503,7 +1701,7 @@ const App = () => {
   const [arr, setArr]       = useState({ loading:false, loaded:false, error:null, arrMetrics:[], arrSummary:{}, arrFlagCount:{}, arrCompanies:[] });
 
   const [activeTab, setTab]     = useState('overview');
-  const [activeDash, setDash]   = useState('finance');
+  const [activeDash, setDash]   = useState('home');
   const [sidebarOpen, setSidebar] = useState(true);
 
   // ── Load FME on mount ───────────────────────────────────────────────────────
@@ -1557,16 +1755,18 @@ const App = () => {
   const handleDashChange = id => { setDash(id); setTab('overview'); };
 
   // ── Header subtitle ─────────────────────────────────────────────────────────
-  const headerSub = activeDash === 'arr'
-    ? arr.loading ? 'Loading ARR data…'
-      : arr.loaded ? `ARR intelligence · ${Object.keys(arr.arrSummary).length} months`
-      : 'Select to load'
-    : fme.loading ? 'Loading…'
-      : `Variance analysis intelligence · ${fmt.number(rawData.length)} total records${isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}`;
+  const headerSub =
+    activeDash === 'home'    ? 'Playroll Internal Analytics · Beta' :
+    activeDash === 'arr'
+      ? arr.loading ? 'Loading ARR data…'
+        : arr.loaded ? `ARR intelligence · ${Object.keys(arr.arrSummary).length} months`
+        : 'Select to load'
+      : fme.loading ? 'Loading…'
+        : `Variance analysis intelligence · ${fmt.number(rawData.length)} total records${isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}`;
 
   return (
     <div className="shell">
-      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
       <Sidebar
         open={sidebarOpen}
         onToggle={() => setSidebar(o => !o)}
@@ -1577,7 +1777,7 @@ const App = () => {
       <div className="app">
         <header className="app-header">
           <div className="header-left">
-            <div className="logo">{activeDash==='arr' ? 'ARR' : 'Finance adjustments'}</div>
+            <div className="logo">{activeDash==='home' ? 'Internal Analytics' : activeDash==='arr' ? 'ARR' : 'Finance adjustments'}</div>
             <div className="header-sub">{headerSub} · Updated {meta.generatedAt ? new Date(meta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           </div>
           <nav className="tab-nav">
@@ -1588,6 +1788,11 @@ const App = () => {
         </header>
 
         <main className="app-main">
+
+          {/* ── Home ── */}
+          {activeDash==='home' && (
+            <HomePage onNavigate={id => { setDash(id); setTab('overview'); }} />
+          )}
 
           {/* ── Finance Adjustments ── */}
           {activeDash==='finance' && (
