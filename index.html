@@ -1460,88 +1460,168 @@ const CoverageBanner = ({ rawCount, cleanedCount }) => {
   );
 };
 
-// ── APP ROOT ─────────────────────────────────────────────────────────────────
+// ── Skeleton loader ──────────────────────────────────────────────────────────
+const SkeletonBlock = ({ h='16px', w='100%', mb='8px', radius='6px' }) => (
+  <div style={{height:h, width:w, borderRadius:radius, marginBottom:mb,
+    background:'linear-gradient(90deg,var(--surface-high) 25%,var(--surface-highest) 50%,var(--surface-high) 75%)',
+    backgroundSize:'200% 100%', animation:'shimmer 1.4s infinite'}} />
+);
+const SkeletonCard = () => (
+  <div className="kpi-card">
+    <SkeletonBlock h="10px" w="60%" mb="10px" />
+    <SkeletonBlock h="28px" w="80%" mb="6px" />
+    <SkeletonBlock h="10px" w="50%" mb="0" />
+  </div>
+);
+const DashboardSkeleton = () => (
+  <div className="tab-content" style={{paddingTop:'4px'}}>
+    <div className="kpi-grid" style={{marginBottom:'20px'}}>
+      {[1,2,3,4,5,6].map(i=><SkeletonCard key={i}/>)}
+    </div>
+    <div className="charts-row">
+      <div className="chart-card" style={{flex:2}}>
+        <SkeletonBlock h="14px" w="40%" mb="16px" />
+        <SkeletonBlock h="240px" mb="0" radius="8px" />
+      </div>
+      <div className="chart-card" style={{flex:1}}>
+        <SkeletonBlock h="14px" w="50%" mb="16px" />
+        <SkeletonBlock h="240px" mb="0" radius="8px" />
+      </div>
+    </div>
+    <div className="chart-card">
+      <SkeletonBlock h="14px" w="35%" mb="16px" />
+      {[1,2,3,4,5].map(i=><SkeletonBlock key={i} h="40px" mb="4px" radius="4px" />)}
+    </div>
+  </div>
+);
+
+// ── APP ROOT ──────────────────────────────────────────────────────────────────
 const App = () => {
-  const [state, setState]       = useState({ loading:true, error:null, rawData:[], cleanedData:[], taxonomy:[], arrMetrics:[], arrSummary:{}, arrFlagCount:{}, arrCompanies:[], meta:{} });
+  // FME state — loads immediately on mount
+  const [fme, setFme]       = useState({ loading:true, error:null, rawData:[], cleanedData:[], taxonomy:[], meta:{} });
+  // ARR state — loads lazily on first selection
+  const [arr, setArr]       = useState({ loading:false, loaded:false, error:null, arrMetrics:[], arrSummary:{}, arrFlagCount:{}, arrCompanies:[] });
+
   const [activeTab, setTab]     = useState('overview');
   const [activeDash, setDash]   = useState('finance');
   const [sidebarOpen, setSidebar] = useState(true);
 
+  // ── Load FME on mount ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
-      setState({ loading:false, error:'APPS_SCRIPT_URL is not configured. Open index.html and replace YOUR_APPS_SCRIPT_URL_HERE with your deployed Apps Script URL.', rawData:[], cleanedData:[], taxonomy:[], meta:{} });
+      setFme(s=>({...s, loading:false, error:'APPS_SCRIPT_URL is not configured. Open index.html and replace YOUR_APPS_SCRIPT_URL_HERE with your deployed Apps Script URL.'}));
       return;
     }
-    // Fetch FME and ARR data in parallel
-    const fetchFME = fetch(APPS_SCRIPT_URL).then(r => { if (!r.ok) throw new Error(`FME HTTP ${r.status}`); return r.json(); });
-    const fetchARR = ARR_SCRIPT_URL
-      ? fetch(ARR_SCRIPT_URL).then(r => { if (!r.ok) throw new Error(`ARR HTTP ${r.status}`); return r.json(); }).catch(() => ({}))
-      : Promise.resolve({});
-
-    Promise.all([fetchFME, fetchARR])
-      .then(([fme, arr]) => {
-        if (fme.error) throw new Error(fme.error);
-        const rawData      = fme.rawData     || fme.cleanedData || [];
-        const cleanedData  = fme.cleanedData || [];
-        const arrMetrics   = arr.arrMetrics   || [];
-        const arrSummary   = arr.arrSummary   || {};
-        const arrFlagCount = arr.arrFlagCount || {};
-        const arrCompanies = arr.arrCompanies || [];
-        setState({ loading:false, error:null, rawData, cleanedData, taxonomy:fme.taxonomy||[],
-          arrMetrics, arrSummary, arrFlagCount, arrCompanies, meta:fme.meta||{} });
+    fetch(APPS_SCRIPT_URL)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        setFme({
+          loading:false, error:null,
+          rawData:    d.rawData     || d.cleanedData || [],
+          cleanedData:d.cleanedData || [],
+          taxonomy:   d.taxonomy    || [],
+          meta:       d.meta        || {}
+        });
       })
-      .catch(err => setState(s=>({...s, loading:false, error:err.message})));
+      .catch(err => setFme(s=>({...s, loading:false, error:err.message})));
   }, []);
 
-  if (state.loading) return <LoadingScreen />;
-  if (state.error)   return <ErrorScreen msg={state.error} />;
+  // ── Load ARR lazily when tab first selected ─────────────────────────────────
+  useEffect(() => {
+    if (activeDash !== 'arr') return;
+    if (arr.loaded || arr.loading) return;
+    if (!ARR_SCRIPT_URL) return;
 
-  const { rawData, cleanedData, taxonomy, arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompanies=[], meta } = state;
+    setArr(s=>({...s, loading:true, error:null}));
+    fetch(ARR_SCRIPT_URL)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        setArr({
+          loading:false, loaded:true, error:null,
+          arrMetrics:   d.arrMetrics   || [],
+          arrSummary:   d.arrSummary   || {},
+          arrFlagCount: d.arrFlagCount || {},
+          arrCompanies: d.arrCompanies || [],
+        });
+      })
+      .catch(err => setArr(s=>({...s, loading:false, error:err.message})));
+  }, [activeDash]);
+
+  const { rawData, cleanedData, taxonomy, meta } = fme;
   const isPartial = cleanedData.length < rawData.length;
-  const showTabs = activeDash === 'finance';
-  const TABS = [['overview','Overview'],['gaps','Product gaps'],['trend','Trend analysis']];
+  const showTabs  = activeDash === 'finance';
+  const TABS      = [['overview','Overview'],['gaps','Product gaps'],['trend','Trend analysis']];
+
+  const handleDashChange = id => { setDash(id); setTab('overview'); };
+
+  // ── Header subtitle ─────────────────────────────────────────────────────────
+  const headerSub = activeDash === 'arr'
+    ? arr.loading ? 'Loading ARR data…'
+      : arr.loaded ? `ARR intelligence · ${Object.keys(arr.arrSummary).length} months`
+      : 'Select to load'
+    : fme.loading ? 'Loading…'
+      : `Variance analysis intelligence · ${fmt.number(rawData.length)} total records${isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}`;
 
   return (
     <div className="shell">
+      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
       <Sidebar
         open={sidebarOpen}
         onToggle={() => setSidebar(o => !o)}
         activeDash={activeDash}
-        onDashChange={id => { setDash(id); setTab('overview'); }}
+        onDashChange={handleDashChange}
       />
 
       <div className="app">
         <header className="app-header">
           <div className="header-left">
-            <div className="logo">{activeDash==='arr'?'ARR':'Finance adjustments'}</div>
-            <div className="header-sub">
-              Variance analysis intelligence · {fmt.number(rawData.length)} total records
-              {isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}
-              {' · '}Updated {meta.generatedAt ? new Date(meta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}
-            </div>
+            <div className="logo">{activeDash==='arr' ? 'ARR' : 'Finance adjustments'}</div>
+            <div className="header-sub">{headerSub} · Updated {meta.generatedAt ? new Date(meta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           </div>
           <nav className="tab-nav">
-            {TABS.map(([id,label])=>(
+            {showTabs && TABS.map(([id,label])=>(
               <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
             ))}
           </nav>
         </header>
 
         <main className="app-main">
-          {activeDash==='arr'     && <ARRDashboard arrMetrics={arrMetrics} arrSummary={arrSummary} arrFlagCount={arrFlagCount} arrCompanies={arrCompanies} />}
-          {activeDash==='finance' && activeTab==='overview' && <Overview rows={rawData} taxonomy={taxonomy} />}
-          {activeDash==='finance' && activeTab==='gaps' && (
-            <div>
-              {isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
-              <ProductGaps rows={cleanedData} taxonomy={taxonomy} />
-            </div>
+
+          {/* ── Finance Adjustments ── */}
+          {activeDash==='finance' && (
+            fme.loading ? <DashboardSkeleton /> :
+            fme.error   ? <ErrorScreen msg={fme.error} /> :
+            <>
+              {activeTab==='overview' && <Overview rows={rawData} taxonomy={taxonomy} />}
+              {activeTab==='gaps' && (
+                <div>
+                  {isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
+                  <ProductGaps rows={cleanedData} taxonomy={taxonomy} />
+                </div>
+              )}
+              {activeTab==='trend' && (
+                <div>
+                  {isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
+                  <TrendAnalysis rows={cleanedData} taxonomy={taxonomy} />
+                </div>
+              )}
+            </>
           )}
-          {activeDash==='finance' && activeTab==='trend' && (
-            <div>
-              {isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
-              <TrendAnalysis rows={cleanedData} taxonomy={taxonomy} />
-            </div>
+
+          {/* ── ARR ── */}
+          {activeDash==='arr' && (
+            arr.loading ? <DashboardSkeleton /> :
+            arr.error   ? <ErrorScreen msg={arr.error} /> :
+            <ARRDashboard
+              arrMetrics={arr.arrMetrics}
+              arrSummary={arr.arrSummary}
+              arrFlagCount={arr.arrFlagCount}
+              arrCompanies={arr.arrCompanies}
+            />
           )}
+
         </main>
       </div>
     </div>
@@ -1549,6 +1629,3 @@ const App = () => {
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-</script>
-</body>
-</html>
