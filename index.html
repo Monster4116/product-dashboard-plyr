@@ -348,6 +348,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 // ── CONFIG — replace with your deployed Apps Script URL ──────────────────────
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzyGNRRgugXHsiSEyIYbL9zpyCXdfjBA75vaQKItiKPT5LW3QiqC0whbxMX8YoNZYvTCQ/exec';
+const ARR_SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbwNgaYqLVVd3x2b5w1tsYgT-chpn8x3_ybMuXVNnKX0wMr_a3NXiYkCdOZLG8zLzNPB8A/exec';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = {
@@ -1088,10 +1089,12 @@ const fmtARR = n => {
   return `${s}$${Math.round(a).toLocaleString()}`;
 };
 
-const ARRDashboard = ({ arrMetrics=[], arrFlags=[], arrCompanies=[] }) => {
+const ARRDashboard = ({ arrMetrics=[], arrSubcat={}, arrFlagCount={}, arrCompanies=[] }) => {
   const [selMonth, setSelMonth]     = useState(null);
   const [expandedMo, setExpandedMo] = useState(null);
 
+  // arrSubcat already aggregated server-side: { "2026-03": [{sub,hc,ac,ap,ad},...] }
+  // arrFlagCount already aggregated server-side: { "2026-03": 132 }
   const { months, trendData, subcatData, flagsByMonth } = useMemo(() => {
     const byMonth = {};
     arrMetrics.forEach(r => {
@@ -1108,24 +1111,9 @@ const ARRDashboard = ({ arrMetrics=[], arrFlags=[], arrCompanies=[] }) => {
         signedARR:g('SIGNED').arr, signedEE:g('SIGNED').ee,
         newHireARR:g('NEW HIRE').arr, newHireEE:g('NEW HIRE').ee };
     });
-    const subcatByMonth = {}, flagsByMonth = {};
-    arrFlags.forEach(r => {
-      const m = r.CURRENT_MONTH ? String(r.CURRENT_MONTH).substring(0,10) : '';
-      if (!m) return;
-      const sub = r.SUBCATEGORY||'';
-      const ap = Math.round(Number(r.ARR_PREV||0)), ac = Math.round(Number(r.ARR_CURR||0)), ad = Math.round(Number(r.ARR_DELTA||0));
-      if (!subcatByMonth[m]) subcatByMonth[m] = {};
-      if (!subcatByMonth[m][sub]) subcatByMonth[m][sub] = {hc:0,ap:0,ac:0,ad:0};
-      subcatByMonth[m][sub].hc++; subcatByMonth[m][sub].ap+=ap; subcatByMonth[m][sub].ac+=ac; subcatByMonth[m][sub].ad+=ad;
-      if (r.HAS_FLAGS===true||r.HAS_FLAGS==='TRUE'||r.HAS_FLAGS===1||r.HAS_FLAGS==='1')
-        flagsByMonth[m] = (flagsByMonth[m]||0)+1;
-    });
-    const subcatData = {};
-    Object.entries(subcatByMonth).forEach(([m,s]) => {
-      subcatData[m] = Object.entries(s).map(([sub,v])=>({sub,...v})).sort((a,b)=>b.ac-a.ac);
-    });
-    return { months, trendData, subcatData, flagsByMonth };
-  }, [arrMetrics, arrFlags]);
+    // Use pre-aggregated data from server — no client-side row processing needed
+    return { months, trendData, subcatData: arrSubcat, flagsByMonth: arrFlagCount };
+  }, [arrMetrics, arrSubcat, arrFlagCount]);
 
   const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const moLabel = m => { if(!m) return ''; try { const d=new Date(m); return `${MNAMES[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`; } catch(e){return m;} };
@@ -1423,7 +1411,7 @@ const CoverageBanner = ({ rawCount, cleanedCount }) => {
 
 // ── APP ROOT ─────────────────────────────────────────────────────────────────
 const App = () => {
-  const [state, setState]       = useState({ loading:true, error:null, rawData:[], cleanedData:[], taxonomy:[], meta:{} });
+  const [state, setState]       = useState({ loading:true, error:null, rawData:[], cleanedData:[], taxonomy:[], arrMetrics:[], arrSubcat:{}, arrFlagCount:{}, arrCompanies:[], meta:{} });
   const [activeTab, setTab]     = useState('overview');
   const [activeDash, setDash]   = useState('finance');
   const [sidebarOpen, setSidebar] = useState(true);
@@ -1433,16 +1421,23 @@ const App = () => {
       setState({ loading:false, error:'APPS_SCRIPT_URL is not configured. Open index.html and replace YOUR_APPS_SCRIPT_URL_HERE with your deployed Apps Script URL.', rawData:[], cleanedData:[], taxonomy:[], meta:{} });
       return;
     }
-    fetch(APPS_SCRIPT_URL)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(d => {
-        if (d.error) throw new Error(d.error);
-        const rawData      = d.rawData     || d.cleanedData || [];
-        const cleanedData  = d.cleanedData || [];
-        const arrMetrics   = d.arrMetrics   || [];
-        const arrFlags     = d.arrFlags     || [];
-        const arrCompanies = d.arrCompanies || [];
-        setState({ loading:false, error:null, rawData, cleanedData, taxonomy:d.taxonomy||[], arrMetrics, arrFlags, arrCompanies, meta:d.meta||{} });
+    // Fetch FME and ARR data in parallel
+    const fetchFME = fetch(APPS_SCRIPT_URL).then(r => { if (!r.ok) throw new Error(`FME HTTP ${r.status}`); return r.json(); });
+    const fetchARR = ARR_SCRIPT_URL
+      ? fetch(ARR_SCRIPT_URL).then(r => { if (!r.ok) throw new Error(`ARR HTTP ${r.status}`); return r.json(); }).catch(() => ({}))
+      : Promise.resolve({});
+
+    Promise.all([fetchFME, fetchARR])
+      .then(([fme, arr]) => {
+        if (fme.error) throw new Error(fme.error);
+        const rawData      = fme.rawData     || fme.cleanedData || [];
+        const cleanedData  = fme.cleanedData || [];
+        const arrMetrics   = arr.arrMetrics   || [];
+        const arrSubcat    = arr.arrSubcat    || {};
+        const arrFlagCount = arr.arrFlagCount || {};
+        const arrCompanies = arr.arrCompanies || [];
+        setState({ loading:false, error:null, rawData, cleanedData, taxonomy:fme.taxonomy||[],
+          arrMetrics, arrSubcat, arrFlagCount, arrCompanies, meta:fme.meta||{} });
       })
       .catch(err => setState(s=>({...s, loading:false, error:err.message})));
   }, []);
@@ -1450,7 +1445,7 @@ const App = () => {
   if (state.loading) return <LoadingScreen />;
   if (state.error)   return <ErrorScreen msg={state.error} />;
 
-  const { rawData, cleanedData, taxonomy, arrMetrics=[], arrFlags=[], arrCompanies=[], meta } = state;
+  const { rawData, cleanedData, taxonomy, arrMetrics=[], arrSubcat={}, arrFlagCount={}, arrCompanies=[], meta } = state;
   const isPartial = cleanedData.length < rawData.length;
   const showTabs = activeDash === 'finance';
   const TABS = [['overview','Overview'],['gaps','Product gaps'],['trend','Trend analysis']];
@@ -1482,7 +1477,7 @@ const App = () => {
         </header>
 
         <main className="app-main">
-          {activeDash==='arr'     && <ARRDashboard arrMetrics={arrMetrics} arrFlags={arrFlags} arrCompanies={arrCompanies} />}
+          {activeDash==='arr'     && <ARRDashboard arrMetrics={arrMetrics} arrSubcat={arrSubcat} arrFlagCount={arrFlagCount} arrCompanies={arrCompanies} />}
           {activeDash==='finance' && activeTab==='overview' && <Overview rows={rawData} taxonomy={taxonomy} />}
           {activeDash==='finance' && activeTab==='gaps' && (
             <div>
