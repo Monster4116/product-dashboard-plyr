@@ -1409,61 +1409,56 @@ const IconARR  = () => (
 // ── Dashboard Registry ─────────────────────────────────────────────────────────
 // Add future dashboards here as new entries. Each becomes a sidebar nav item.
 // ── Sidebar nav structure ─────────────────────────────────────────────────────
-// Add new dashboards here. live=true means it's clickable; false = coming soon.
 const SIDEBAR_GROUPS = [
   {
-    id: 'product', label: 'Product',
-    icon: <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />,
-    items: [
-      { id:'market-insights',  label:'Market Insights',  live:false },
-      { id:'customer-health',  label:'Customer Health',  live:false },
+    id:'product', label:'Product',
+    icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>,
+    items:[
+      {id:'market-insights', label:'Market Insights',  live:false},
+      {id:'customer-health', label:'Customer Health',  live:false},
     ],
   },
   {
-    id: 'rd', label: 'R&D',
-    icon: <Icon d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />,
-    items: [
-      { id:'finance', label:'Finance adjustments', live:true },
+    id:'rd', label:'R&D',
+    icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+    items:[
+      {id:'finance', label:'Finance adjustments', live:true},
     ],
   },
   {
-    id: 'finance', label: 'Finance',
-    icon: <Icon d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />,
-    items: [
-      { id:'invoicing',  label:'Invoicing Data',  live:false },
-      { id:'arr',        label:'ARR Report',       live:true  },
+    id:'finance-group', label:'Finance',
+    icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
+    items:[
+      {id:'invoicing', label:'Invoicing Data', live:false},
+      {id:'arr',       label:'ARR Report',     live:true},
     ],
   },
   {
-    id: 'payroll', label: 'Payroll',
-    icon: <Icon d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />,
-    items: [
-      { id:'monthly-validations', label:'Monthly Validations', live:false },
+    id:'payroll', label:'Payroll',
+    icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>,
+    items:[
+      {id:'monthly-validations', label:'Monthly Validations', live:false},
     ],
   },
   {
-    id: 'operations', label: 'Operations',
-    icon: <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />,
-    items: [
-      { id:'employee-success', label:'Employee Success', live:false },
-      { id:'customer-success', label:'Customer Success', live:false },
+    id:'operations', label:'Operations',
+    icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
+    items:[
+      {id:'employee-success', label:'Employee Success', live:false},
+      {id:'customer-success', label:'Customer Success', live:false},
     ],
   },
 ];
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
-  // Which groups are expanded — default all open
   const [expanded, setExpanded] = useState(() => {
     const s = {};
     SIDEBAR_GROUPS.forEach(g => { s[g.id] = true; });
     return s;
   });
 
-  const toggleGroup = id => setExpanded(e => ({...e, [id]: !e[id]}));
-
-  // Find which group the active dash belongs to (for icon tooltip in collapsed mode)
-  const activeItem = SIDEBAR_GROUPS.flatMap(g=>g.items).find(i=>i.id===activeDash);
+  const toggle = id => setExpanded(e => ({...e, [id]: !e[id]}));
 
   return (
     <aside className={`sidebar ${open ? 'open' : 'closed'}`}>
@@ -1483,64 +1478,120 @@ const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
         <button
           className={`nav-item${activeDash==='home'?' active':''}`}
           onClick={()=>onDashChange('home')}
-          style={{marginBottom:'4px'}}
           title={!open ? 'Home' : undefined}
         >
           <span className="nav-icon"><IconHome /></span>
           {open && <span className="nav-label">Home</span>}
         </button>
 
-        <div className="sidebar-divider" />
+        <div className="sidebar-divider" style={{margin:'8px 0'}} />
 
         {/* Accordion groups */}
         {SIDEBAR_GROUPS.map(group => {
-          const isOpen = expanded[group.id];
-          const hasActive = group.items.some(i => i.id === activeDash);
+          const isExp = expanded[group.id];
           return (
             <div key={group.id} style={{marginBottom:'2px'}}>
 
-              {/* Group header — only shown when sidebar expanded */}
-              {open ? (
-                <div className="sidebar-group-hdr" onClick={()=>toggleGroup(group.id)}>
-                  <span className="sidebar-group-label">{group.label}</span>
-                  <span className={`sidebar-group-chevron${isOpen?' open':''}`}>▶</span>
-                </div>
-              ) : (
-                /* Collapsed mode: show group icon as divider hint */
-                <div style={{display:'flex',justifyContent:'center',padding:'4px 0',opacity:0.3}}>
-                  <div style={{width:'20px',height:'1px',background:'var(--surface-high)'}} />
-                </div>
-              )}
+              {/* Group header */}
+              <button
+                onClick={() => open && toggle(group.id)}
+                style={{
+                  display:'flex', alignItems:'center', width:'100%',
+                  padding: open ? '9px 12px' : '9px',
+                  borderRadius:'var(--radius)', border:'none',
+                  background:'none', cursor: open ? 'pointer' : 'default',
+                  gap:'10px', justifyContent: open ? 'flex-start' : 'center',
+                  transition:'background .12s',
+                }}
+                onMouseEnter={e => { if(open) e.currentTarget.style.background='var(--surface-low)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background='none'; }}
+                title={!open ? group.label : undefined}
+              >
+                {/* Group icon */}
+                <span style={{
+                  flexShrink:0, color:'var(--text-secondary)',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  width:'20px', height:'20px',
+                }}>
+                  {group.icon}
+                </span>
 
-              {/* Group items */}
+                {open && (
+                  <>
+                    <span style={{
+                      flex:1, textAlign:'left',
+                      fontSize:'0.875rem', fontWeight:500,
+                      color:'var(--text-primary)', letterSpacing:0,
+                    }}>
+                      {group.label}
+                    </span>
+                    {/* Chevron — up when expanded, down when collapsed */}
+                    <svg
+                      width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      stroke="var(--text-disabled)" strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round"
+                      style={{flexShrink:0, transition:'transform .18s', transform: isExp ? 'rotate(180deg)' : 'rotate(0deg)'}}
+                    >
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </>
+                )}
+              </button>
+
+              {/* Items — animated collapse */}
               <div style={{
-                maxHeight: (open && isOpen) || !open ? '400px' : '0',
+                maxHeight: isExp || !open ? '300px' : '0px',
                 overflow:'hidden',
                 transition:'max-height .2s ease',
               }}>
-                {group.items.map(item => (
-                  <button
-                    key={item.id}
-                    className={`nav-item${activeDash===item.id?' active':item.live?'':''}`}
-                    onClick={()=>{ if(item.live) onDashChange(item.id); }}
-                    title={!open ? item.label : undefined}
-                    style={{
-                      paddingLeft: open ? '20px' : '12px',
-                      cursor: item.live ? 'pointer' : 'default',
-                      opacity: item.live ? 1 : 0.6,
-                    }}
-                  >
-                    <span className="nav-icon" style={{fontSize:'6px',color:activeDash===item.id?'var(--color-primary-main)':'var(--text-disabled)'}}>
-                      {activeDash===item.id ? '●' : '○'}
-                    </span>
-                    {open && (
-                      <span style={{flex:1,display:'flex',alignItems:'center',justifyContent:'space-between',gap:'6px',minWidth:0}}>
-                        <span className="nav-label" style={{color:activeDash===item.id?'var(--color-primary-main)':item.live?'var(--text-primary)':'var(--text-secondary)'}}>{item.label}</span>
-                        {!item.live && <span className="coming-soon-badge">Soon</span>}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {group.items.map(item => {
+                  const isActive = activeDash === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      className={`nav-item${isActive ? ' active' : ''}`}
+                      onClick={() => { if(item.live) onDashChange(item.id); }}
+                      title={!open ? item.label : undefined}
+                      style={{
+                        paddingLeft: open ? '42px' : '12px',
+                        cursor: item.live ? 'pointer' : 'default',
+                        opacity: item.live ? 1 : 0.55,
+                        fontWeight: isActive ? 600 : 400,
+                      }}
+                    >
+                      {open ? (
+                        <span style={{
+                          flex:1, display:'flex', alignItems:'center',
+                          justifyContent:'space-between', gap:'8px', minWidth:0,
+                        }}>
+                          <span style={{
+                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                            fontSize:'0.875rem',
+                            color: isActive ? 'var(--color-primary-main)' : item.live ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          }}>
+                            {item.label}
+                          </span>
+                          {!item.live && (
+                            <span style={{
+                              fontSize:'0.5625rem', fontWeight:600, flexShrink:0,
+                              padding:'2px 7px', borderRadius:'var(--radius-chip)',
+                              background:'#FFA72615', color:'var(--color-warning-main)',
+                              border:'1px solid #FFA72630',
+                            }}>
+                              Soon
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="nav-icon" style={{
+                          width:'6px', height:'6px', borderRadius:'50%', flexShrink:0,
+                          background: isActive ? 'var(--color-primary-main)' : 'var(--container-outline-variant)',
+                          display:'inline-block',
+                        }} />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
             </div>
