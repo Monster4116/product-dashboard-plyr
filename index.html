@@ -12,7 +12,7 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
-/* ── Playroll Design Tokens ── */
+/* ── @product Design Tokens ── */
 :root {
   --color-primary-light:   #AF91EF;
   --color-primary-main:    #5110DD;
@@ -385,7 +385,7 @@ const parseMonth = m => {
 
 const monthKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '';
 
-// Playroll-aligned chart colors: primary purple + semantic palette
+// @product-aligned chart colors: primary purple + semantic palette
 const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D','#267EB5','#388E3C'];
 
 const PRIORITY_CONF = {
@@ -402,7 +402,7 @@ const getPriority = (abs, records) => {
   return 'Low';
 };
 
-// Chart.js defaults for Playroll light theme
+// Chart.js defaults for @product light theme
 const CHART_SCALE_DEFAULTS = {
   tickColor: '#49454F',
   gridColor: '#E9E9EA',
@@ -1509,7 +1509,7 @@ const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
   return (
     <aside className={`sidebar ${open ? 'open' : 'closed'}`}>
       <div className="sidebar-logo-row">
-        {open && <span className="sidebar-wordmark">Playroll</span>}
+        {open && <span className="sidebar-wordmark">@product</span>}
         <button className="sidebar-toggle" onClick={onToggle} title={open ? 'Collapse' : 'Expand'}>
           {open ? <IconChevronLeft /> : <IconMenu />}
         </button>
@@ -1547,7 +1547,7 @@ const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
   );
 };
 
-// ── Coverage Banner (Playroll design) ────────────────────────────────────────
+// ── Coverage Banner (@product design) ────────────────────────────────────────
 const CoverageBanner = ({ rawCount, cleanedCount }) => {
   const pct     = rawCount ? (cleanedCount / rawCount * 100) : 0;
   const missing = rawCount - cleanedCount;
@@ -1610,7 +1610,7 @@ const HomePage = ({ onNavigate }) => {
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
       ),
-      desc:  'Headcount trends, attrition analysis and workforce planning across all Playroll entities and territories.',
+      desc:  'Headcount trends, attrition analysis and workforce planning across all @product entities and territories.',
       status:'soon',
       color: '#BA7517',
       bg:    '#BA751710',
@@ -1665,10 +1665,10 @@ const HomePage = ({ onNavigate }) => {
         </div>
 
         <h1 style={{fontSize:'1.75rem',fontWeight:700,color:'var(--text-primary)',marginBottom:'10px',letterSpacing:'-0.02em',lineHeight:1.2}}>
-          Playroll Internal Analytics
+          @product Internal Analytics
         </h1>
         <p style={{fontSize:'0.9375rem',color:'var(--text-secondary)',maxWidth:'540px',lineHeight:1.65,marginBottom:'24px'}}>
-          A single place to understand financial adjustments, ARR trends, and operational performance across the Playroll portfolio. Built for the internal team.
+          A single place to understand financial adjustments, ARR trends, and operational performance across the @product portfolio. Built for the internal team.
         </p>
 
         {/* Under construction notice */}
@@ -1759,7 +1759,7 @@ const HomePage = ({ onNavigate }) => {
         flexWrap:'wrap',gap:'10px',
       }}>
         <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
-          Playroll Internal Analytics · Beta v0.1 · For internal use only
+          @product Internal Analytics · Beta v0.1 · For internal use only
         </div>
         <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
           Data refreshes when the page is reloaded
@@ -1894,7 +1894,7 @@ const App = () => {
 
   // ── Header subtitle ─────────────────────────────────────────────────────────
   const headerSub =
-    activeDash === 'home'    ? 'Playroll Internal Analytics · Beta' :
+    activeDash === 'home'    ? '@product Internal Analytics · Beta' :
     activeDash === 'arr'
       ? arr.loading ? 'Loading ARR data…'
         : arr.loaded ? `ARR intelligence · ${Object.keys(arr.arrSummary).length} months`
