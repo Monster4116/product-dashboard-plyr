@@ -349,6 +349,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 // ── CONFIG — replace with your deployed Apps Script URL ──────────────────────
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzyGNRRgugXHsiSEyIYbL9zpyCXdfjBA75vaQKItiKPT5LW3QiqC0whbxMX8YoNZYvTCQ/exec';
 const ARR_SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbzX3Xc8dwmtRR8HC0QGamANMDJrVV_SV5zLNzdgbD-f-U1dlQP325XFMmqVqU37qfgUNA/exec';
+const PAYROLL_SCRIPT_URL = 'https://script.google.com/a/macros/playroll.com/s/AKfycbys1lq94eQVcOkpUKTCBqfadiVuuXSP2Z0RafHdEgoWBV18Jgef7ucUXN17ZVdOEWk/exec';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = {
@@ -1495,12 +1496,21 @@ const IconARR  = () => (
     <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
   </svg>
 );
+const IconPayroll = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="5" width="20" height="14" rx="2"/>
+    <line x1="2" y1="10" x2="22" y2="10"/>
+    <line x1="6" y1="15" x2="10" y2="15"/>
+    <line x1="14" y1="15" x2="18" y2="15"/>
+  </svg>
+);
 
 // ── Dashboard Registry ─────────────────────────────────────────────────────────
 // Add future dashboards here as new entries. Each becomes a sidebar nav item.
 const DASHBOARD_NAV = [
-  { id:'finance', label:'Finance adjustments', icon:<IconChart />, group:'Analytics' },
-  { id:'arr',     label:'ARR',                icon:<IconARR />,   group:'Analytics' },
+  { id:'finance', label:'Finance adjustments', icon:<IconChart />,   group:'Analytics' },
+  { id:'arr',     label:'ARR',                icon:<IconARR />,     group:'Analytics' },
+  { id:'payroll', label:'Payroll validation',  icon:<IconPayroll />, group:'Payroll'   },
 ];
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -1600,6 +1610,22 @@ const HomePage = ({ onNavigate }) => {
       status:'live',
       color: '#0F6E56',
       bg:    '#0F6E5610',
+    },
+    {
+      id:    'payroll',
+      label: 'Payroll validation',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2"/>
+          <line x1="2" y1="10" x2="22" y2="10"/>
+          <line x1="6" y1="15" x2="10" y2="15"/>
+          <line x1="14" y1="15" x2="18" y2="15"/>
+        </svg>
+      ),
+      desc:  'Review month-on-month payroll movements, employee delta breakdowns, and surface stale simulation alerts across all territories.',
+      status:'live',
+      color: '#185FA5',
+      bg:    '#185FA510',
     },
     {
       id:    'hr',
@@ -1770,6 +1796,581 @@ const HomePage = ({ onNavigate }) => {
   );
 };
 
+// ── PAYROLL DASHBOARD ─────────────────────────────────────────────────────────
+
+const fmtUSD = n => {
+  const v = parseFloat(n) || 0;
+  const abs = Math.abs(v);
+  const sign = v < 0 ? '-' : '';
+  if (abs >= 1e6)  return `${sign}$${(abs/1e6).toFixed(2)}M`;
+  if (abs >= 1000) return `${sign}$${(abs/1000).toFixed(1)}K`;
+  return `${sign}$${abs.toFixed(0)}`;
+};
+const fmtUSDFull = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(parseFloat(n)||0);
+const fmtPct = n => { const v = parseFloat(n)||0; return `${v>0?'+':''}${v.toFixed(1)}%`; };
+const fmtDelta = n => { const v = parseFloat(n)||0; if(!v) return '—'; return `${v>0?'+':''}${fmtUSD(v)}`; };
+
+const LIFE_BADGE = {
+  ACTIVE:                { bg:'#EAF3DE', color:'#27500A' },
+  NEW_STARTER:           { bg:'#E6F1FB', color:'#0C447C' },
+  TERMINATION:           { bg:'#FCEBEB', color:'#791F1F' },
+  ACTIVE_WITH_FUTURE_END:{ bg:'#FEF3E2', color:'#7B4A00' },
+};
+const PAY_BADGE = {
+  LOCAL:   { bg:'#E6F1FB', color:'#0C447C' },
+  PEGGED:  { bg:'#EEEDFE', color:'#3C3489' },
+  FOREIGN: { bg:'#E1F5EE', color:'#085041' },
+};
+const lifeBadge = v => LIFE_BADGE[v] || { bg:'#F1EFE8', color:'#5F5E5A' };
+const payBadge  = v => PAY_BADGE[v]  || { bg:'#F1EFE8', color:'#5F5E5A' };
+
+const Badge = ({ label, bg, color }) => (
+  <span style={{
+    display:'inline-block', padding:'2px 8px', borderRadius:'var(--radius-chip)',
+    fontSize:'0.625rem', fontWeight:600, background:bg, color, whiteSpace:'nowrap',
+  }}>{label}</span>
+);
+
+// ── Payroll Overview Tab ──────────────────────────────────────────────────────
+const PayrollOverview = ({ deltas, flags, meta }) => {
+  const [terMode, setTerMode] = useState('total');
+  const terChartRef = useRef(null);
+  const terInstRef  = useRef(null);
+  const payChartRef = useRef(null);
+  const payInstRef  = useRef(null);
+
+  const stats = useMemo(() => {
+    const active      = deltas.filter(r => r.LIFECYCLE_STATUS !== 'TERMINATION' && r.MOVEMENT_TYPE !== 'LEAVER');
+    const newStarters = deltas.filter(r => r.LIFECYCLE_STATUS === 'NEW_STARTER'  || r.MOVEMENT_TYPE === 'JOINER');
+    const terminations= deltas.filter(r => r.LIFECYCLE_STATUS === 'TERMINATION'  || r.MOVEMENT_TYPE === 'LEAVER');
+    const salChanged  = deltas.filter(r => r.SALARY_PAYMENT_CHANGED).length;
+    const statusChg   = deltas.filter(r => r.STATUS_CHANGED).length;
+    const dateChg     = deltas.filter(r => r.START_DATE_CHANGED || r.END_DATE_CHANGED).length;
+    const staleCount  = flags.length;
+
+    const currTotal = deltas.reduce((s,r) => s + (parseFloat(r.USD_TOT_EX)||0), 0);
+    const prevTotal = deltas.reduce((s,r) => s + (parseFloat(r.USD_TOT_EX)||0) - (parseFloat(r.USD_TOT_EX_DELTA)||0), 0);
+    const netDelta  = currTotal - prevTotal;
+    const netPct    = prevTotal ? (netDelta / prevTotal * 100) : 0;
+
+    // Territory totals
+    const terMap = {};
+    deltas.forEach(r => {
+      const ter = r.CO_ID || 'Unknown';
+      if (!terMap[ter]) terMap[ter] = { ter, curr:0, prev:0, delta:0 };
+      terMap[ter].curr  += parseFloat(r.USD_TOT_EX)||0;
+      terMap[ter].delta += parseFloat(r.USD_TOT_EX_DELTA)||0;
+      terMap[ter].prev  += (parseFloat(r.USD_TOT_EX)||0) - (parseFloat(r.USD_TOT_EX_DELTA)||0);
+    });
+    const terArr = Object.values(terMap);
+    const topByTotal = [...terArr].sort((a,b)=>b.curr-a.curr).slice(0,10);
+    const topByMov   = [...terArr].sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta)).slice(0,10);
+
+    // Payment type breakdown
+    const payMap = { LOCAL:0, PEGGED:0, FOREIGN:0 };
+    deltas.forEach(r => { const p = r.SALARY_PAYMENT||'LOCAL'; payMap[p] = (payMap[p]||0)+1; });
+
+    // Top movers
+    const topMovers = [...deltas]
+      .filter(r => r.USD_TOT_EX_DELTA !== null && r.USD_TOT_EX_DELTA !== 0)
+      .sort((a,b) => Math.abs(parseFloat(b.USD_TOT_EX_DELTA)||0) - Math.abs(parseFloat(a.USD_TOT_EX_DELTA)||0))
+      .slice(0,5);
+
+    return { currTotal, prevTotal, netDelta, netPct, newStarters: newStarters.length,
+      terminations: terminations.length, salChanged, statusChg, dateChg, staleCount,
+      topByTotal, topByMov, payMap, topMovers, headcount: deltas.length };
+  }, [deltas, flags]);
+
+  // Territory chart
+  useEffect(() => {
+    if (!terChartRef.current) return;
+    if (terInstRef.current) { terInstRef.current.destroy(); terInstRef.current = null; }
+    const data = terMode === 'total' ? stats.topByTotal : stats.topByMov;
+    const cfg = terMode === 'total' ? {
+      type:'bar',
+      data:{
+        labels: data.map(t=>t.ter),
+        datasets:[
+          { label:'Prev', data:data.map(t=>t.prev), backgroundColor:'#CAC4CF', borderRadius:3 },
+          { label:'Curr', data:data.map(t=>t.curr), backgroundColor:'#5110DD', borderRadius:3 },
+        ],
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ grid:{ display:false }, ticks:{ font:{ size:11 }, color:'#49454F', maxRotation:30 } },
+          y:{ grid:{ color:'#E9E9EA' }, ticks:{ font:{ size:11 }, color:'#49454F', callback:v=>fmtUSD(v) } },
+        },
+      },
+    } : {
+      type:'bar',
+      data:{
+        labels: data.map(t=>t.ter),
+        datasets:[{
+          label:'Delta',
+          data: data.map(t=>t.delta),
+          backgroundColor: data.map(t=>t.delta>=0 ? '#66BB6A' : '#F44336'),
+          borderRadius:3,
+        }],
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ grid:{ display:false }, ticks:{ font:{ size:11 }, color:'#49454F', maxRotation:30 } },
+          y:{ grid:{ color:'#E9E9EA' }, ticks:{ font:{ size:11 }, color:'#49454F', callback:v=>(v>=0?'+':'')+fmtUSD(v) } },
+        },
+      },
+    };
+    terInstRef.current = new Chart(terChartRef.current, cfg);
+  }, [terMode, stats]);
+
+  // Payment type donut
+  useEffect(() => {
+    if (!payChartRef.current) return;
+    if (payInstRef.current) { payInstRef.current.destroy(); payInstRef.current = null; }
+    payInstRef.current = new Chart(payChartRef.current, {
+      type:'doughnut',
+      data:{
+        labels:['Local','Pegged','Foreign'],
+        datasets:[{ data:[stats.payMap.LOCAL||0, stats.payMap.PEGGED||0, stats.payMap.FOREIGN||0],
+          backgroundColor:['#5110DD','#AFA9EC','#1D9E75'], borderWidth:0, hoverOffset:4 }],
+      },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'68%', plugins:{ legend:{ display:false } } },
+    });
+  }, [stats]);
+
+  const prevLabel = meta.prevMonth ? new Date(meta.prevMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—';
+  const currLabel = meta.currMonth ? new Date(meta.currMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—';
+
+  return (
+    <div className="tab-content">
+      {/* KPI strip */}
+      <div className="kpi-grid">
+        {[
+          ['Headcount',         String(stats.headcount),               'Active employees',                 null],
+          ['USD Total (curr)',  fmtUSDFull(stats.currTotal),           currLabel,                          null],
+          ['USD Total (prev)',  fmtUSDFull(stats.prevTotal),           prevLabel,                          null],
+          ['Net USD Delta',     fmtDelta(stats.netDelta),              fmtPct(stats.netPct),               stats.netDelta>=0?'pos':'neg'],
+          ['New Starters',      String(stats.newStarters),             `Joining ${currLabel}`,             'pos'],
+          ['Terminations',      String(stats.terminations),            `Leaving ${currLabel}`,             stats.terminations>0?'neg':null],
+        ].map(([label,value,sub,sign])=>(
+          <KPICard key={label} label={label} value={value} sub={sub} sign={sign} />
+        ))}
+      </div>
+
+      {/* Secondary strip */}
+      <div className="peak-strip" style={{marginBottom:'20px'}}>
+        {[
+          ['Salary changes',  stats.salChanged,  stats.salChanged>0  ? 'var(--color-warning-main)' : 'var(--text-primary)'],
+          ['Status changes',  stats.statusChg,   stats.statusChg>0   ? 'var(--color-warning-main)' : 'var(--text-primary)'],
+          ['Date changes',    stats.dateChg,      stats.dateChg>0     ? 'var(--color-warning-main)' : 'var(--text-primary)'],
+          ['Stale records',   stats.staleCount,   stats.staleCount>0  ? 'var(--color-error-main)'   : 'var(--text-primary)'],
+        ].map(([label,val,color])=>(
+          <div key={label} className="peak-item">
+            <span className="peak-label">{label}</span>
+            <span className="peak-val" style={{color}}>{val}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Territory chart */}
+      <div className="chart-card">
+        <div className="chart-title" style={{justifyContent:'space-between'}}>
+          <div>
+            <div>{terMode==='total' ? 'Top 10 territories by USD total' : 'Top 10 territories by USD movement'}</div>
+            <div style={{fontSize:'0.75rem',fontWeight:400,color:'var(--text-secondary)',marginTop:'2px'}}>
+              {terMode==='total' ? `${currLabel} vs ${prevLabel}` : `Largest absolute delta — ${currLabel} vs ${prevLabel}`}
+            </div>
+          </div>
+          <div style={{display:'flex',gap:0,border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',overflow:'hidden'}}>
+            {[['total','By total'],['movement','By movement']].map(([m,l])=>(
+              <button key={m} onClick={()=>setTerMode(m)} style={{
+                padding:'6px 14px', border:'none', cursor:'pointer', fontSize:'0.75rem', fontWeight:500,
+                background: terMode===m ? 'var(--color-primary-main)' : 'transparent',
+                color: terMode===m ? '#fff' : 'var(--text-secondary)',
+                transition:'background .15s, color .15s',
+              }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        {terMode==='total' && (
+          <div style={{display:'flex',gap:'14px',marginBottom:'10px',fontSize:'0.6875rem',color:'var(--text-secondary)'}}>
+            <span style={{display:'flex',alignItems:'center',gap:'4px'}}><span style={{width:10,height:10,borderRadius:2,background:'#CAC4CF',display:'inline-block'}}/>{prevLabel}</span>
+            <span style={{display:'flex',alignItems:'center',gap:'4px'}}><span style={{width:10,height:10,borderRadius:2,background:'#5110DD',display:'inline-block'}}/>{currLabel}</span>
+          </div>
+        )}
+        <div style={{position:'relative',width:'100%',height:'220px'}}>
+          <canvas ref={terChartRef} style={{height:'220px',maxHeight:'220px'}} />
+        </div>
+      </div>
+
+      {/* Bottom row: donut + top movers */}
+      <div className="charts-row">
+        <div className="chart-card" style={{flex:1,marginBottom:0}}>
+          <div className="chart-title">Payment type breakdown</div>
+          <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'10px',fontSize:'0.6875rem',color:'var(--text-secondary)'}}>
+            {[['#5110DD','Local',stats.payMap.LOCAL||0],['#AFA9EC','Pegged',stats.payMap.PEGGED||0],['#1D9E75','Foreign',stats.payMap.FOREIGN||0]].map(([c,l,n])=>(
+              <span key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                <span style={{width:8,height:8,borderRadius:'50%',background:c,display:'inline-block'}}/>
+                {l} {n}
+              </span>
+            ))}
+          </div>
+          <div style={{position:'relative',height:'160px'}}>
+            <canvas ref={payChartRef} style={{height:'160px',maxHeight:'160px'}} />
+          </div>
+        </div>
+
+        <div className="chart-card" style={{flex:1.6,marginBottom:0}}>
+          <div className="chart-title">Top movers (USD delta)</div>
+          <div className="table-wrap" style={{marginBottom:0}}>
+            <table className="data-table">
+              <thead><tr>
+                <th>Employee</th><th className="r">Prev ({prevLabel})</th><th className="r">Curr ({currLabel})</th><th className="r">Delta</th>
+              </tr></thead>
+              <tbody>
+                {stats.topMovers.length === 0 && (
+                  <tr><td colSpan={4} className="no-data">No movements this cycle</td></tr>
+                )}
+                {stats.topMovers.map(r => {
+                  const d = parseFloat(r.USD_TOT_EX_DELTA)||0;
+                  const prev = (parseFloat(r.USD_TOT_EX)||0) - d;
+                  const curr = parseFloat(r.USD_TOT_EX)||0;
+                  return (
+                    <tr key={r.DELTA_KEY||r.EE_ID}>
+                      <td style={{fontWeight:500}}>{r.EE_NAME||'—'}</td>
+                      <td className="r">{prev ? fmtUSD(prev) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
+                      <td className="r">{curr ? fmtUSD(curr) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
+                      <td className={`r ${d>0?'pos':'neg'}`} style={{fontWeight:600}}>{fmtDelta(d)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Payroll Details Tab ───────────────────────────────────────────────────────
+const PayrollDetails = ({ deltas, meta }) => {
+  const [filterTer,  setFilterTer]  = useState('');
+  const [filterLife, setFilterLife] = useState('');
+  const [filterPay,  setFilterPay]  = useState('');
+  const [changesOnly,setChangesOnly]= useState(false);
+  const [expanded,   setExpanded]   = useState({});
+
+  const territories  = useMemo(()=>[...new Set(deltas.map(r=>r.CO_ID).filter(Boolean))].sort(),[deltas]);
+  const lifecycles   = useMemo(()=>[...new Set(deltas.map(r=>r.LIFECYCLE_STATUS).filter(Boolean))].sort(),[deltas]);
+  const payTypes     = useMemo(()=>[...new Set(deltas.map(r=>r.SALARY_PAYMENT).filter(Boolean))].sort(),[deltas]);
+
+  const filtered = useMemo(()=>deltas.filter(r=>{
+    if (filterTer  && r.CO_ID           !== filterTer)  return false;
+    if (filterLife && r.LIFECYCLE_STATUS !== filterLife) return false;
+    if (filterPay  && r.SALARY_PAYMENT  !== filterPay)  return false;
+    if (changesOnly && !r.ANY_CHANGE) return false;
+    return true;
+  }),[deltas,filterTer,filterLife,filterPay,changesOnly]);
+
+  const toggleRow = id => setExpanded(e=>({...e,[id]:!e[id]}));
+
+  const prevLabel = meta.prevMonth ? new Date(meta.prevMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : 'Prev';
+  const currLabel = meta.currMonth ? new Date(meta.currMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : 'Curr';
+
+  const CurrencyBlock = ({ label, bg, color, r, prefix, fields }) => {
+    const rows = fields.map(([name,curr,prev,delta,pct])=>{
+      const c = parseFloat(r[curr])||0;
+      const d = parseFloat(r[delta])||0;
+      const p = c - d;
+      const pctVal = r[pct] ? parseFloat(r[pct]) : null;
+      return { name, c, d, p, pctVal };
+    });
+    if (rows.every(row=>!row.c && !row.p)) return null;
+    return (
+      <div style={{marginBottom:'12px'}}>
+        <span style={{display:'inline-block',background:bg,color,fontSize:'0.625rem',fontWeight:600,
+          textTransform:'uppercase',letterSpacing:'.08em',padding:'2px 8px',borderRadius:'4px',marginBottom:'6px'}}>
+          {label}
+        </span>
+        <table className="sub-table">
+          <thead><tr><th>Field</th><th className="r">{prevLabel}</th><th className="r">{currLabel}</th><th className="r">Delta</th></tr></thead>
+          <tbody>
+            {rows.map(({name,c,p,d,pctVal})=>(
+              <tr key={name}>
+                <td>{name}</td>
+                <td className="r">{p ? `${prefix}${Math.abs(p).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—'}</td>
+                <td className="r">{c ? `${prefix}${Math.abs(c).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—'}</td>
+                <td className={`r ${d>0?'pos':d<0?'neg':''}`} style={{fontWeight:500}}>
+                  {d !== 0 ? `${d>0?'+':''}${prefix}${Math.abs(d).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—'}
+                  {pctVal !== null && d !== 0 && <span style={{fontSize:'0.625rem',opacity:.7,marginLeft:'3px'}}>({fmtPct(pctVal)})</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <div className="tab-content">
+      <div className="filter-panel">
+        <div className="filter-group">
+          <label>Territory</label>
+          <select className="f-select" value={filterTer} onChange={e=>setFilterTer(e.target.value)}>
+            <option value="">All territories</option>
+            {territories.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Lifecycle</label>
+          <select className="f-select" value={filterLife} onChange={e=>setFilterLife(e.target.value)}>
+            <option value="">All statuses</option>
+            {lifecycles.map(l=><option key={l} value={l}>{l.replace(/_/g,' ')}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Payment type</label>
+          <select className="f-select" value={filterPay} onChange={e=>setFilterPay(e.target.value)}>
+            <option value="">All types</option>
+            {payTypes.map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="filter-group" style={{minWidth:'auto',justifyContent:'flex-end'}}>
+          <label>&nbsp;</label>
+          <label style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'0.8125rem',color:'var(--text-secondary)',fontWeight:500,padding:'7px 0'}}>
+            <input type="checkbox" checked={changesOnly} onChange={e=>setChangesOnly(e.target.checked)} style={{accentColor:'var(--color-primary-main)'}}/>
+            Changes only
+          </label>
+        </div>
+        <div style={{marginLeft:'auto',alignSelf:'flex-end',fontSize:'0.75rem',color:'var(--text-secondary)',paddingBottom:'6px'}}>
+          {filtered.length} of {deltas.length} employees
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead><tr>
+            <th style={{width:'28px'}}></th>
+            <th>Employee</th>
+            <th>Lifecycle</th>
+            <th>Payment</th>
+            <th className="r">USD {prevLabel}</th>
+            <th className="r">USD {currLabel}</th>
+            <th className="r">Delta</th>
+            <th className="r">% Chg</th>
+          </tr></thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr><td colSpan={8} className="no-data">No employees match the current filters</td></tr>
+            )}
+            {filtered.map(r => {
+              const id   = r.DELTA_KEY || r.EE_ID || Math.random();
+              const d    = parseFloat(r.USD_TOT_EX_DELTA)||0;
+              const curr = parseFloat(r.USD_TOT_EX)||0;
+              const prev = curr - d;
+              const pct  = prev && d ? (d/Math.abs(prev)*100) : null;
+              const lbg  = lifeBadge(r.LIFECYCLE_STATUS);
+              const pbg  = payBadge(r.SALARY_PAYMENT);
+              const isOpen = !!expanded[id];
+
+              // Change indicator dots
+              const dots = [];
+              if (r.SALARY_PAYMENT_CHANGED) dots.push({ bg:'#FFA726', title:'Salary changed' });
+              if (r.START_DATE_CHANGED)     dots.push({ bg:'#185FA5', title:'Start date changed' });
+              if (r.END_DATE_CHANGED)       dots.push({ bg:'#F44336', title:'End date changed' });
+
+              const hasSal = r.SAL_TOT_EX !== null && r.SAL_TOT_EX !== undefined;
+
+              return (
+                <React.Fragment key={id}>
+                  <tr className={`gap-row${isOpen?' open':''}`} onClick={()=>toggleRow(id)}>
+                    <td className="expand-cell">
+                      <span style={{display:'inline-block',transition:'transform .15s',transform:isOpen?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
+                    </td>
+                    <td>
+                      <span style={{fontWeight:600,marginRight:'4px'}}>{r.EE_NAME||'—'}</span>
+                      {dots.map((dot,i)=>(
+                        <span key={i} title={dot.title} style={{display:'inline-block',width:'5px',height:'5px',borderRadius:'50%',background:dot.bg,marginLeft:'2px',verticalAlign:'middle'}}/>
+                      ))}
+                      <div style={{fontSize:'0.6875rem',color:'var(--text-secondary)',marginTop:'1px'}}>{r.CO_ID||'—'}</div>
+                    </td>
+                    <td><Badge label={(r.LIFECYCLE_STATUS||'—').replace(/_/g,' ')} bg={lbg.bg} color={lbg.color} /></td>
+                    <td><Badge label={r.SALARY_PAYMENT||'—'} bg={pbg.bg} color={pbg.color} /></td>
+                    <td className="r">{prev ? fmtUSD(prev) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
+                    <td className="r">{curr ? fmtUSD(curr) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
+                    <td className={`r ${d>0?'pos':d<0?'neg':''}`} style={{fontWeight:500}}>{d!==0?fmtDelta(d):'—'}</td>
+                    <td className={`r ${pct!==null&&pct>0?'pos':pct!==null&&pct<0?'neg':''}`}>
+                      {pct!==null && d!==0 ? fmtPct(pct) : '—'}
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={8} className="detail-td">
+                        <div className="detail-panel">
+                          <div style={{display:'flex',gap:'20px',flexWrap:'wrap'}}>
+                            {/* Currency blocks */}
+                            <div style={{flex:2,minWidth:'300px'}}>
+                              <div className="detail-sub-hdr" style={{marginBottom:'14px'}}>Currency breakdown</div>
+                              <CurrencyBlock label="USD — Normalised" bg="#E6F1FB" color="#0C447C" r={r} prefix="$"
+                                fields={[
+                                  ['Base salary',    'USD_BAS',    null,'USD_BAS_DELTA',   'USD_BAS_PCT'],
+                                  ['Employer tax',   'USD_ER',     null,'USD_ER_DELTA',    'USD_ER_PCT'],
+                                  ['Total excl. fee','USD_TOT_EX', null,'USD_TOT_EX_DELTA','USD_TOT_EX_PCT'],
+                                  ['FX cost',        'USD_FX',     null,'USD_FX_DELTA',    'USD_FX_PCT'],
+                                ]}
+                              />
+                              <CurrencyBlock label="LOC — Local currency" bg="#F1EFE8" color="#5F5E5A" r={r} prefix=""
+                                fields={[
+                                  ['Base salary',    'LOC_BAS',    null,'LOC_BAS_DELTA',   null],
+                                  ['Employer tax',   'LOC_ER',     null,'LOC_ER_DELTA',    null],
+                                  ['Total excl. fee','LOC_TOT_EX', null,'LOC_TOT_EX_DELTA',null],
+                                  ['FX cost',        'LOC_FX',     null,'LOC_FX_DELTA',    null],
+                                ]}
+                              />
+                              {hasSal && (
+                                <CurrencyBlock label="SAL — Salary payment currency" bg="#EEEDFE" color="#3C3489" r={r} prefix="$"
+                                  fields={[
+                                    ['Base salary',    'SAL_BAS',    null,'SAL_BAS_DELTA',   null],
+                                    ['Employer tax',   'SAL_ER',     null,'SAL_ER_DELTA',    null],
+                                    ['Total excl. fee','SAL_TOT_EX', null,'SAL_TOT_EX_DELTA',null],
+                                  ]}
+                                />
+                              )}
+                            </div>
+                            {/* Record metadata */}
+                            <div style={{flex:1,minWidth:'180px'}}>
+                              <div className="detail-sub-hdr" style={{marginBottom:'14px'}}>Record info</div>
+                              <table className="sub-table">
+                                <tbody>
+                                  {[
+                                    ['Movement',         (r.MOVEMENT_TYPE||'—')],
+                                    ['Lifecycle',        (r.LIFECYCLE_STATUS||'—').replace(/_/g,' ')],
+                                    ['Payment type',     r.SALARY_PAYMENT||'—'],
+                                    ['Prev record type', r.PREV_TYPE||'—'],
+                                    ['Curr record type', r.CURR_TYPE||'—'],
+                                    ['Record movement',  r.RECORD_MOVEMENT||'—'],
+                                    ['Prev start date',  r.PREV_START_DATE||'—'],
+                                    ['Curr start date',  r.CURR_START_DATE||'—'],
+                                    ['Prev end date',    r.PREV_END_DATE||'—'],
+                                    ['Curr end date',    r.CURR_END_DATE||'—'],
+                                    ...(r.SALARY_PAYMENT_CHANGED ? [['Salary changed','Yes']] : []),
+                                    ...(r.STATUS_CHANGED         ? [['Status changed','Yes']] : []),
+                                    ...(r.START_DATE_CHANGED     ? [['Start date changed','Yes']] : []),
+                                    ...(r.END_DATE_CHANGED       ? [['End date changed','Yes']] : []),
+                                  ].map(([k,v])=>(
+                                    <tr key={k}>
+                                      <td>{k}</td>
+                                      <td className="r" style={{color:'var(--text-primary)',fontWeight:500}}>{v}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ── Payroll Flags Tab ─────────────────────────────────────────────────────────
+const PayrollFlags = ({ flags, meta }) => {
+  const currLabel = meta.currMonth ? new Date(meta.currMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—';
+  const territory = flags.filter(f=>f.ALERT_TYPE==='TERRITORY_FAILURE');
+  const unexpected= flags.filter(f=>f.ALERT_TYPE==='INDIVIDUAL' && f.IS_EXPECTED===false);
+  const expected  = flags.filter(f=>f.ALERT_TYPE==='INDIVIDUAL' && f.IS_EXPECTED===true);
+
+  if (flags.length === 0) {
+    return (
+      <div className="tab-content">
+        <div style={{background:'#EAF3DE',border:'1px solid #8BC34A40',borderRadius:'var(--radius)',padding:'24px',display:'flex',alignItems:'center',gap:'14px'}}>
+          <span style={{fontSize:'20px'}}>✅</span>
+          <div>
+            <div style={{fontWeight:600,color:'#27500A',marginBottom:'2px'}}>All clear for {currLabel}</div>
+            <div style={{fontSize:'0.8125rem',color:'var(--text-secondary)'}}>No stale records or territory failures detected for this cycle.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const FlagCard = ({ f, borderColor, typeLabel, typeBg, typeColor, badgeLabel, badgeBg, badgeColor }) => (
+    <div style={{
+      background:'var(--bg-paper)', border:`1px solid var(--surface-high)`,
+      borderLeft:`3px solid ${borderColor}`,
+      borderRadius:'0 var(--radius) var(--radius) 0',
+      padding:'14px 18px', marginBottom:'10px',
+      boxShadow:'var(--shadow-elevation)', display:'flex',
+      justifyContent:'space-between', alignItems:'flex-start', gap:'12px',
+    }}>
+      <div>
+        <div style={{fontSize:'0.625rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:typeColor,marginBottom:'4px'}}>{typeLabel}</div>
+        <div style={{fontWeight:600,color:'var(--text-primary)',marginBottom:'4px'}}>
+          {f.ALERT_TYPE==='TERRITORY_FAILURE' ? `${f.TERRITORY||f.CO_ID||'—'} — calculator not refreshing` : `${f.EE_NAME||'—'} — simulation stale`}
+        </div>
+        <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',lineHeight:1.6}}>
+          {f.ALERT_TYPE==='TERRITORY_FAILURE'
+            ? `${f.EMPLOYEE_COUNT||'?'} of ${f.EMPLOYEE_COUNT||'?'} employees stale · Last refresh ${f.LAST_REFRESH||'unknown'} · ${f.DAYS_STALE ? `${f.DAYS_STALE}d ago` : ''}`
+            : `Status: ${f.EMP_STATUS||'unknown'} · Last refresh ${f.LAST_REFRESH||'unknown'} ${f.DAYS_STALE ? `· ${f.DAYS_STALE}d ago` : ''}`
+          }
+        </div>
+      </div>
+      <Badge label={badgeLabel} bg={badgeBg} color={badgeColor} />
+    </div>
+  );
+
+  return (
+    <div className="tab-content">
+      {territory.length > 0 && (
+        <>
+          <div style={{fontSize:'0.6875rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--text-secondary)',marginBottom:'10px'}}>
+            Territory failures ({territory.length})
+          </div>
+          {territory.map((f,i)=>(
+            <FlagCard key={i} f={f} borderColor="#F44336" typeLabel="Territory failure" typeColor="#A32D2D"
+              badgeLabel="TERRITORY_FAILURE" badgeBg="#FCEBEB" badgeColor="#791F1F" />
+          ))}
+        </>
+      )}
+      {unexpected.length > 0 && (
+        <>
+          <div style={{fontSize:'0.6875rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--text-secondary)',margin:'14px 0 10px'}}>
+            Unexpected stale records ({unexpected.length})
+          </div>
+          {unexpected.map((f,i)=>(
+            <FlagCard key={i} f={f} borderColor="#FFA726" typeLabel="Individual · Unexpected" typeColor="#854F0B"
+              badgeLabel="UNEXPECTED" badgeBg="#FAEEDA" badgeColor="#633806" />
+          ))}
+        </>
+      )}
+      {expected.length > 0 && (
+        <>
+          <div style={{fontSize:'0.6875rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--text-secondary)',margin:'14px 0 10px'}}>
+            Expected stale records ({expected.length})
+          </div>
+          {expected.map((f,i)=>(
+            <FlagCard key={i} f={f} borderColor="#CAC4CF" typeLabel="Individual · Expected" typeColor="#49454F"
+              badgeLabel="EXPECTED" badgeBg="#F1EFE8" badgeColor="#49454F" />
+          ))}
+        </>
+      )}
+    </div>
+  );
+};
+
 // ── Skeleton loader ──────────────────────────────────────────────────────────
 const SkeletonBlock = ({ h='16px', w='100%', mb='8px', radius='6px' }) => (
   <div style={{height:h, width:w, borderRadius:radius, marginBottom:mb,
@@ -1811,6 +2412,13 @@ const App = () => {
   const [fme, setFme]       = useState({ loading:true, error:null, rawData:[], cleanedData:[], taxonomy:[], meta:{} });
   // ARR state — loads lazily on first selection
   const [arr, setArr]       = useState({ loading:false, loaded:false, error:null, arrMetrics:[], arrSummary:{}, arrFlagCount:{}, arrCompanies:[], meta:{} });
+  // Payroll state — loads lazily on first selection
+  const [payroll, setPayroll] = useState({
+    loading:false, loaded:false, error:null,
+    months:[], selectedMonth:null,
+    deltas:[], flags:[], meta:{},
+  });
+  const [payrollTab, setPayrollTab] = useState('overview');
 
   const [activeTab, setTab]     = useState('overview');
   const [activeDash, setDash]   = useState('home');
@@ -1884,11 +2492,51 @@ const App = () => {
       .finally(() => clearTimeout(timeout));
   }, [activeDash, arr.loaded, arr.loading]);
 
+  // ── Load Payroll months list on first selection ─────────────────────────────
+  useEffect(() => {
+    if (activeDash !== 'payroll') return;
+    if (payroll.months.length > 0 || payroll.loading) return;
+    setPayroll(s=>({...s, loading:true, error:null}));
+    fetch(`${PAYROLL_SCRIPT_URL}?mode=months`, { cache:'no-store' })
+      .then(async r => { const t=await r.text(); if(!r.ok) throw new Error(`HTTP ${r.status}`); try{return JSON.parse(t);}catch(e){throw new Error('Invalid JSON: '+t.slice(0,200));} })
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        const latest = d.latestMonth || (d.months||[])[0] || null;
+        setPayroll(s=>({...s, loading:false, months:d.months||[], selectedMonth:latest}));
+      })
+      .catch(err => setPayroll(s=>({...s, loading:false, error:err.message})));
+  }, [activeDash]);
+
+  // ── Load Payroll deltas + flags when selectedMonth changes ──────────────────
+  useEffect(() => {
+    if (!payroll.selectedMonth) return;
+    const month = payroll.selectedMonth;
+    setPayroll(s=>({...s, loading:true, error:null, deltas:[], flags:[], meta:{}}));
+    const ctrl    = new AbortController();
+    const timeout = setTimeout(()=>ctrl.abort(), 30000);
+    Promise.all([
+      fetch(`${PAYROLL_SCRIPT_URL}?mode=deltas&month=${encodeURIComponent(month)}`,{signal:ctrl.signal,cache:'no-store'}).then(r=>r.json()),
+      fetch(`${PAYROLL_SCRIPT_URL}?mode=flags&month=${encodeURIComponent(month)}`, {signal:ctrl.signal,cache:'no-store'}).then(r=>r.json()),
+    ])
+    .then(([dData, fData]) => {
+      if (dData.error) throw new Error(dData.error);
+      setPayroll(s=>({...s, loading:false, loaded:true,
+        deltas: dData.deltas||[], flags: fData.flags||[], meta: dData.meta||{},
+      }));
+    })
+    .catch(err => {
+      const msg = err.name==='AbortError' ? 'Request timed out after 30s.' : err.message;
+      setPayroll(s=>({...s, loading:false, error:msg}));
+    })
+    .finally(()=>clearTimeout(timeout));
+  }, [payroll.selectedMonth]);
+
   const { rawData, cleanedData, taxonomy, meta } = fme;
   const isPartial = cleanedData.length < rawData.length;
   const showTabs  = activeDash === 'finance';
   const TABS      = [['overview','Overview'],['gaps','Product gaps'],['trend','Trend analysis']];
-  const activeMeta = activeDash === 'arr' ? arr.meta : meta;
+  const PAYROLL_TABS = [['overview','Overview'],['details','Details'],['flags',`Flags${payroll.flags.length>0?` (${payroll.flags.length})`:''}`]];
+  const activeMeta = activeDash === 'arr' ? arr.meta : activeDash === 'payroll' ? payroll.meta : meta;
 
   const handleDashChange = id => { setDash(id); setTab('overview'); };
 
@@ -1898,6 +2546,10 @@ const App = () => {
     activeDash === 'arr'
       ? arr.loading ? 'Loading ARR data…'
         : arr.loaded ? `ARR intelligence · ${Object.keys(arr.arrSummary).length} months`
+        : 'Select to load'
+    : activeDash === 'payroll'
+      ? payroll.loading ? 'Loading payroll data…'
+        : payroll.loaded ? `Payroll validation · ${payroll.meta.totalRows||0} employees · ${payroll.months.length} months available`
         : 'Select to load'
       : fme.loading ? 'Loading…'
         : `Variance analysis intelligence · ${fmt.number(rawData.length)} total records${isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}`;
@@ -1915,10 +2567,24 @@ const App = () => {
       <div className="app">
         <header className="app-header">
           <div className="header-left">
-            <div className="logo">{activeDash==='home' ? 'Internal Analytics' : activeDash==='arr' ? 'ARR' : 'Finance adjustments'}</div>
+            <div className="logo">{activeDash==='home' ? 'Internal Analytics' : activeDash==='arr' ? 'ARR' : activeDash==='payroll' ? 'Payroll validation' : 'Finance adjustments'}</div>
             <div className="header-sub">{headerSub} · Updated {activeMeta?.generatedAt ? new Date(activeMeta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           </div>
           <nav className="tab-nav">
+            {activeDash === 'payroll' && (
+              <>
+                {payroll.months.length > 0 && (
+                  <select className="f-select" style={{marginRight:'8px'}} value={payroll.selectedMonth||''} onChange={e=>setPayroll(s=>({...s,selectedMonth:e.target.value,loaded:false,deltas:[],flags:[],meta:{}}))}>
+                    {payroll.months.map(m=>(
+                      <option key={m} value={m}>{new Date(m).toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</option>
+                    ))}
+                  </select>
+                )}
+                {PAYROLL_TABS.map(([id,label])=>(
+                  <button key={id} className={`tab-btn${payrollTab===id?' active':''}`} onClick={()=>setPayrollTab(id)}>{label}</button>
+                ))}
+              </>
+            )}
             {showTabs && TABS.map(([id,label])=>(
               <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
             ))}
@@ -1962,6 +2628,17 @@ const App = () => {
               arrSummary={arr.arrSummary}
               arrFlagCount={arr.arrFlagCount}
             />
+          )}
+
+          {/* ── Payroll Validation ── */}
+          {activeDash==='payroll' && (
+            payroll.loading ? <DashboardSkeleton /> :
+            payroll.error   ? <ErrorScreen msg={payroll.error} /> :
+            <>
+              {payrollTab==='overview' && <PayrollOverview deltas={payroll.deltas} flags={payroll.flags} meta={payroll.meta} />}
+              {payrollTab==='details'  && <PayrollDetails  deltas={payroll.deltas} meta={payroll.meta} />}
+              {payrollTab==='flags'    && <PayrollFlags    flags={payroll.flags}   meta={payroll.meta} />}
+            </>
           )}
 
         </main>
