@@ -1093,9 +1093,10 @@ const fmtARR = n => {
 };
 const fmtARRFull = n => { const v=parseFloat(n)||0,s=v<0?'-':''; return `${s}$${Math.abs(Math.round(v)).toLocaleString()}`; };
 
-const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompanies=[] }) => {
-  const [selMonth, setSelMonth]     = useState(null);
+const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={} }) => {
+  const [selMonth, setSelMonth] = useState(null);
   const [expandedMo, setExpandedMo] = useState(null);
+  const [companyState, setCompanyState] = useState({ loading:false, error:null, loadedMonth:null, rows:[] });
 
   const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const moLabel = m => { if(!m) return ''; try { const d=new Date(m); return `${MNAMES[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`; } catch(e){return m;} };
@@ -1103,38 +1104,54 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
   const normSub = s => String(s || '').trim().toLowerCase().replace(/\s+/g, '_');
   const getSub = (subs, key) => (Array.isArray(subs) ? subs : []).find(x => normSub(x.sub) === key) || {ac:0, acR:0, acA:0};
 
+  const normMonth = value => {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value === 'number') {
+      const d = new Date(Math.round((value - 25569) * 86400 * 1000));
+      return d.toISOString().slice(0, 10);
+    }
+    const s = String(value).trim();
+    if (/^\d+(\.\d+)?$/.test(s)) {
+      const d = new Date(Math.round((Number(s) - 25569) * 86400 * 1000));
+      return d.toISOString().slice(0, 10);
+    }
+    return s.substring(0, 10);
+  };
+
   // Build trend data from Metrics sheet (EE counts) + Monthly Summary (ARR)
   const { months, trendData } = useMemo(() => {
-    // EE counts from Metrics
     const eeByMonth = {};
+
     arrMetrics.forEach(r => {
-      const m = r.INV_MONTH ? String(r.INV_MONTH).substring(0,10) : '';
-      const cat = r.CAT;
+      const m = normMonth(r.INV_MONTH);
+      const cat = String(r.CAT || '').trim().toUpperCase();
       if (!m || !cat) return;
       if (!eeByMonth[m]) eeByMonth[m] = {};
-      eeByMonth[m][cat] = Number(r.EE||0);
+      eeByMonth[m][cat] = Number(r.EE || 0);
     });
 
-    // ARR from Monthly Summary — sum contributing subcats per month
     const arrByMonth = {};
-    Object.entries(arrSummary).forEach(([m, subs]) => {
-      arrByMonth[m] = { active:0, signed:0, newHire:0 };
+    Object.entries(arrSummary || {}).forEach(([m, subs]) => {
+      const mk = normMonth(m);
+      if (!mk) return;
+      arrByMonth[mk] = { active:0, signed:0, newHire:0 };
+
       (Array.isArray(subs) ? subs : []).forEach(s => {
         const sub = normSub(s.sub);
         const ac = Number(s.ac || 0);
 
         if (sub === 'stayed_active' || sub === 'active_joiner' || sub === 'stayed_signed_conversion') {
-          arrByMonth[m].active += ac;
-          if (sub === 'active_joiner') arrByMonth[m].newHire += ac;
+          arrByMonth[mk].active += ac;
+          if (sub === 'active_joiner') arrByMonth[mk].newHire += ac;
         }
 
         if (sub === 'stayed_signed' || sub === 'signed_joiner') {
-          arrByMonth[m].signed += ac;
+          arrByMonth[mk].signed += ac;
         }
       });
     });
 
-    const months = [...new Set([...Object.keys(eeByMonth), ...Object.keys(arrSummary)])].sort();
+    const months = [...new Set([...Object.keys(eeByMonth), ...Object.keys(arrByMonth)])].sort();
     const trendData = months.map(m => {
       const ee = eeByMonth[m] || {};
       const ar = arrByMonth[m] || {active:0, signed:0, newHire:0};
@@ -1148,40 +1165,90 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
         newHireEE:  ee['NEW HIRE'] || 0,
       };
     });
+
     return { months, trendData };
   }, [arrMetrics, arrSummary]);
 
-  // Helper: get contributing ARR total for a month
-  const monthTotalARR = (m, mode='actual') => {
-    const subs = Array.isArray(arrSummary[m]) ? arrSummary[m] : [];
-    return subs.filter(s => ARR_CONTRIBUTING.has(normSub(s.sub)))
-               .reduce((a,s) => a + Number(mode==='rolling' ? s.acR : mode==='annual' ? s.acA : s.ac || 0), 0);
+  const summaryForMonth = m => {
+    const direct = arrSummary[m];
+    if (Array.isArray(direct)) return direct;
+    const foundKey = Object.keys(arrSummary || {}).find(k => normMonth(k) === m);
+    return foundKey && Array.isArray(arrSummary[foundKey]) ? arrSummary[foundKey] : [];
   };
 
-  const activeMo = selMonth || (months.length>=2 ? months[months.length-2] : months[months.length-1]) || '';
+  const monthTotalARR = (m, mode='actual') => {
+    const subs = summaryForMonth(m);
+    return subs.filter(s => ARR_CONTRIBUTING.has(normSub(s.sub)))
+      .reduce((a,s) => a + Number(mode==='rolling' ? s.acR : mode==='annual' ? s.acA : s.ac || 0), 0);
+  };
+
+  const activeMo = selMonth || months[months.length - 1] || '';
   const tIdx  = trendData.findIndex(t => t.month === activeMo);
   const td    = trendData[tIdx]   || {};
   const ptd   = trendData[tIdx-1] || {};
-  const subs  = Array.isArray(arrSummary[activeMo]) ? arrSummary[activeMo] : [];
+  const subs  = summaryForMonth(activeMo);
   const gS    = s => getSub(subs, s);
 
   const totalARR  = monthTotalARR(activeMo);
   const prevARR   = tIdx > 0 ? monthTotalARR(months[tIdx-1]) : 0;
   const arrDelta  = totalARR - prevARR;
   const activeEE  = Number(td.activeEE||0), prevEE = Number(ptd.activeEE||0);
-  const leavers   = gS('active_leaver').ac + gS('signed_leaver').ac; // ARR lost
-  const leaversHC = subs.filter(s => normSub(s.sub)==='active_leaver'||normSub(s.sub)==='signed_leaver').length;
   const joinersHC = subs.filter(s => normSub(s.sub)==='signed_joiner'||normSub(s.sub)==='active_joiner').length;
-  const pipeARR   = gS('stayed_signed').ac + gS('signed_joiner').ac;
-  const churnARR  = Math.abs(gS('active_leaver').ac) + Math.abs(gS('signed_leaver').ac);
-  const newBizARR = gS('signed_joiner').ac + gS('active_joiner').ac;
-  const expansion = gS('stayed_active').ac - (tIdx>0?(getSub(arrSummary[months[tIdx-1]] || [], 'stayed_active').ac||0):0)
-                  + gS('stayed_signed').ac - (tIdx>0?(getSub(arrSummary[months[tIdx-1]] || [], 'stayed_signed').ac||0):0);
-  const netARR    = expansion - churnARR;
+  const pipeARR   = Number(gS('stayed_signed').ac || 0) + Number(gS('signed_joiner').ac || 0);
+  const churnARR  = Math.abs(Number(gS('active_leaver').ac || 0)) + Math.abs(Number(gS('signed_leaver').ac || 0));
+  const newBizARR = Number(gS('signed_joiner').ac || 0) + Number(gS('active_joiner').ac || 0);
+  const expansion = Number(gS('stayed_active').ac || 0) - (tIdx>0?(Number(getSub(summaryForMonth(months[tIdx-1]), 'stayed_active').ac || 0)):0)
+                  + Number(gS('stayed_signed').ac || 0) - (tIdx>0?(Number(getSub(summaryForMonth(months[tIdx-1]), 'stayed_signed').ac || 0)):0);
   const maxBar    = Math.max(Math.abs(expansion), churnARR, 1);
   const flagged   = arrFlagCount[activeMo] || 0;
   const arrPerEE  = activeEE > 0 ? totalARR / activeEE : 0;
   const prevArrPerEE = prevEE > 0 ? prevARR / prevEE : 0;
+
+  // Fetch company summary rows only for the currently selected month.
+  useEffect(() => {
+    if (!activeMo || !ARR_SCRIPT_URL) return;
+    if (companyState.loadedMonth === activeMo || companyState.loading) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    setCompanyState(s => ({ ...s, loading:true, error:null }));
+
+    fetch(`${ARR_SCRIPT_URL}?mode=companies&month=${encodeURIComponent(activeMo)}`, {
+      method:'GET',
+      signal:controller.signal,
+      cache:'no-store'
+    })
+      .then(async r => {
+        const text = await r.text();
+        if (!r.ok) throw new Error(`Company summary endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
+        try { return JSON.parse(text); }
+        catch (e) { throw new Error(`Company summary endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
+      })
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        setCompanyState({
+          loading:false,
+          error:null,
+          loadedMonth:activeMo,
+          rows:Array.isArray(d.arrCompanies) ? d.arrCompanies : []
+        });
+      })
+      .catch(err => {
+        const msg = err.name === 'AbortError'
+          ? 'Company summary request timed out after 30 seconds.'
+          : err.message;
+        setCompanyState(s => ({ ...s, loading:false, error:msg, loadedMonth:null, rows:[] }));
+      })
+      .finally(() => clearTimeout(timeout));
+  }, [activeMo]);
+
+  const companyRows = companyState.loadedMonth === activeMo ? companyState.rows : [];
+  const topCompanies = useMemo(() => {
+    return [...companyRows]
+      .sort((a,b) => Math.abs(Number(b.ARR_DELTA || 0)) - Math.abs(Number(a.ARR_DELTA || 0)))
+      .slice(0, 20);
+  }, [companyRows]);
 
   const trendCfg = useMemo(() => ({
     type:'line',
@@ -1205,7 +1272,6 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
   return (
     <div className="tab-content">
 
-      {/* Month selector */}
       <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px',flexWrap:'wrap'}}>
         <div className="filter-group" style={{minWidth:'160px'}}>
           <label>Selected month</label>
@@ -1215,10 +1281,11 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
         </div>
         <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',paddingTop:'16px'}}>
           {months.length} months · {moFull(months[0])} to {moFull(months[months.length-1])}
+          {companyState.loading && <span> · Loading company summary…</span>}
+          {!companyState.loading && companyState.loadedMonth === activeMo && <span> · {fmt.number(companyRows.length)} company rows</span>}
         </div>
       </div>
 
-      {/* KPI strip */}
       <div className="kpi-grid">
         {[
           ['Total ARR',       fmtARR(totalARR),  `${arrDelta>=0?'+':''}${fmtARR(arrDelta)} MoM`,  arrDelta>=0?'pos':'neg'],
@@ -1230,7 +1297,6 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
         ].map(([label,value,sub,sign])=>(<KPICard key={label} label={label} value={value} sub={sub} sign={sign} />))}
       </div>
 
-      {/* Trend chart + Health snapshot */}
       <div className="charts-row">
         <div className="chart-card" style={{flex:2}}>
           <div className="chart-title">ARR trend — Active / Signed / New hire</div>
@@ -1243,7 +1309,7 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
               ['Active EE',      fmt.number(activeEE),   `${activeEE-prevEE>=0?'+':''}${activeEE-prevEE} vs prior month`,  activeEE>=prevEE?'pos':'neg'],
               ['Signed EE',      fmt.number(Number(td.signedEE||0)), 'not yet started', null],
               ['ARR / employee', fmtARR(arrPerEE),       arrPerEE>=prevArrPerEE?'▲ vs prior month':'▼ vs prior month',     arrPerEE>=prevArrPerEE?'pos':'neg'],
-              ['New hires EE',   fmt.number(Number(td.newHireEE||0)), 'started this month', 'pos'],
+              ['Flagged rows',   fmt.number(flagged || companyRows.reduce((s,r)=>s+Number(r.FLAGGED_EE_COUNT||0),0)), 'selected month', flagged?'neg':null],
             ].map(([label,val,sub,sign])=>(
               <div key={label} style={{background:'var(--surface-low)',borderRadius:'var(--radius-sm)',padding:'10px 12px',border:'1px solid var(--surface-high)'}}>
                 <div style={{fontSize:'0.625rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'4px'}}>{label}</div>
@@ -1253,45 +1319,43 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
             ))}
           </div>
           <div style={{fontSize:'0.625rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'8px'}}>ARR movement — {moFull(activeMo)}</div>
-          {[['New biz',newBizARR,'var(--color-success-main)'],['Churn',-churnARR,'var(--color-error-main)']].map(([lbl,val,col])=>(
+          {[
+            ['New biz',newBizARR,'var(--color-success-main)'],
+            ['Churn',-churnARR,'var(--color-error-main)']
+          ].map(([lbl,val,col])=>(
             <div key={lbl} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
               <span style={{fontSize:'0.75rem',color:col,width:'70px',textAlign:'right',flexShrink:0}}>{lbl}</span>
               <div style={{flex:1,height:'8px',background:'var(--surface-high)',borderRadius:'4px',overflow:'hidden'}}>
-                <div style={{height:'100%',width:`${Math.round(Math.abs(val)/maxBar*100)}%`,background:col,borderRadius:'4px'}} />
+                <div style={{height:'100%',width:`${Math.round(Math.abs(val)/maxBar*100)}%`,background:col}} />
               </div>
-              <span style={{fontSize:'0.75rem',fontWeight:600,color:col,width:'65px',flexShrink:0}}>{fmtARR(val)}</span>
+              <span style={{fontSize:'0.75rem',fontWeight:600,color:col,width:'70px'}}>{fmtARR(val)}</span>
             </div>
           ))}
-          <div style={{borderTop:'1px solid var(--surface-high)',paddingTop:'10px',display:'flex',justifyContent:'space-between',marginTop:'4px'}}>
-            <span style={{fontSize:'0.75rem',color:'var(--text-secondary)'}}>MoM change</span>
-            <span style={{fontSize:'1rem',fontWeight:700,color:arrDelta>=0?'var(--color-success-main)':'var(--color-error-main)'}}>{arrDelta>=0?'+':''}{fmtARR(arrDelta)}</span>
-          </div>
         </div>
       </div>
 
-      {/* All months table */}
       <div className="chart-card">
-        <div className="chart-title">All months — click any row to expand sub-category breakdown</div>
+        <div className="chart-title">Monthly ARR movement — click a month to expand sub-category detail</div>
         <div className="table-wrap" style={{border:'none',borderRadius:0,marginBottom:0}}>
           <table className="data-table">
             <thead><tr>
               <th style={{width:28}}></th>
               <th>Month</th>
-              <th className="r">Total ARR</th>
-              <th className="r">MoM change</th>
+              <th className="r">Contributing ARR</th>
+              <th className="r">MoM Delta</th>
               <th className="r">Active EE</th>
               <th className="r">Signed EE</th>
-              <th className="r">New hires</th>
+              <th className="r">New Hire EE</th>
             </tr></thead>
             <tbody>
-              {[...trendData].reverse().map((t, ri) => {
+              {[...trendData].reverse().map((t,ri) => {
                 const revIdx  = trendData.length - 1 - ri;
                 const mArr    = monthTotalARR(t.month);
                 const pArr    = revIdx > 0 ? monthTotalARR(months[revIdx-1]) : null;
                 const delta   = pArr !== null ? mArr - pArr : null;
                 const isOpen  = expandedMo === t.month;
                 const isSel   = activeMo === t.month;
-                const mSubs   = arrSummary[t.month] || [];
+                const mSubs   = summaryForMonth(t.month);
                 return (
                   <React.Fragment key={t.month}>
                     <tr className={`gap-row${isOpen?' open':''}`} style={{background:isSel?'#5110DD08':''}}
@@ -1314,47 +1378,34 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
                             <table className="sub-table">
                               <thead><tr>
                                 <th>Sub-category</th>
-                                <th className="r">ARR (actual)</th>
-                                <th className="r">ARR (rolling 3M)</th>
-                                <th className="r">ARR (annual)</th>
+                                <th className="r">ARR actual</th>
+                                <th className="r">ARR rolling</th>
+                                <th className="r">ARR annual</th>
                                 <th className="r">% of total</th>
                               </tr></thead>
                               <tbody>
                                 {mSubs.map(s => {
-                                  const col = ARR_SUB_COLORS[s.sub]||'#9CA3AF';
-                                  const bg  = ARR_SUB_BG[s.sub]||'var(--surface-low)';
-                                  const lbl = ARR_SUB_LABELS[s.sub]||s.sub;
-                                  const pct = mArr ? Math.round(Math.abs(s.ac)/Math.abs(mArr)*100) : 0;
-                                  const isContrib = ARR_CONTRIBUTING.has(s.sub);
+                                  const sub = normSub(s.sub);
+                                  const col = ARR_SUB_COLORS[sub]||'#9CA3AF';
+                                  const bg  = ARR_SUB_BG[sub]||'var(--surface-low)';
+                                  const lbl = ARR_SUB_LABELS[sub]||sub;
+                                  const pct = mArr ? Math.round(Math.abs(Number(s.ac||0))/Math.abs(mArr)*100) : 0;
+                                  const isContrib = ARR_CONTRIBUTING.has(sub);
                                   return (
-                                    <tr key={s.sub} style={{opacity: isContrib ? 1 : 0.65}}>
+                                    <tr key={sub} style={{opacity: isContrib ? 1 : 0.65}}>
                                       <td>
                                         <span style={{display:'inline-flex',alignItems:'center',gap:'6px'}}>
                                           <span style={{width:'7px',height:'7px',borderRadius:'50%',background:col,display:'inline-block',flexShrink:0}} />
                                           <span style={{fontSize:'0.6875rem',padding:'2px 8px',borderRadius:'var(--radius-chip)',background:bg,color:col,fontWeight:600}}>{lbl}</span>
                                         </span>
                                       </td>
-                                      <td className={`r ${s.ac<0?'neg':'pos'}`} style={{fontFamily:'monospace'}}>{fmtARRFull(s.ac)}</td>
+                                      <td className={`r ${Number(s.ac||0)<0?'neg':'pos'}`} style={{fontFamily:'monospace'}}>{fmtARRFull(s.ac)}</td>
                                       <td className="r" style={{color:'var(--text-secondary)',fontFamily:'monospace'}}>{fmtARRFull(s.acR)}</td>
                                       <td className="r" style={{color:'var(--text-secondary)',fontFamily:'monospace'}}>{fmtARRFull(s.acA)}</td>
-                                      <td className="r">
-                                        <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-                                          <div style={{flex:1,height:'4px',background:'var(--surface-high)',borderRadius:'2px',overflow:'hidden'}}>
-                                            <div style={{height:'100%',width:`${pct}%`,background:col}} />
-                                          </div>
-                                          <span style={{fontSize:'0.6875rem',color:'var(--text-secondary)',minWidth:'28px',textAlign:'right'}}>{pct}%</span>
-                                        </div>
-                                      </td>
+                                      <td className="r">{pct}%</td>
                                     </tr>
                                   );
                                 })}
-                                <tr style={{background:'var(--surface-low)'}}>
-                                  <td style={{fontWeight:600,fontSize:'0.75rem',paddingTop:'8px',paddingBottom:'8px'}}>Contributing total</td>
-                                  <td className="r pos" style={{fontWeight:700,fontFamily:'monospace'}}>{fmtARRFull(mArr)}</td>
-                                  <td className="r" style={{fontWeight:600,color:'var(--text-secondary)',fontFamily:'monospace'}}>{fmtARRFull(monthTotalARR(t.month,'rolling'))}</td>
-                                  <td className="r" style={{fontWeight:600,color:'var(--text-secondary)',fontFamily:'monospace'}}>{fmtARRFull(monthTotalARR(t.month,'annual'))}</td>
-                                  <td></td>
-                                </tr>
                               </tbody>
                             </table>
                           </div>
@@ -1367,6 +1418,61 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, arrCompan
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="chart-card">
+        <div className="section-header" style={{marginBottom:'12px'}}>
+          <div>
+            <h2 className="section-title">Company summary — {moFull(activeMo)}</h2>
+            <p className="section-sub">Loaded separately from Company_Summary using CURRENT_MONTH = {activeMo}. Only required columns are returned.</p>
+          </div>
+          {companyState.loading && <span className="filter-tag">Loading companies…</span>}
+          {companyState.error && <span className="filter-tag" style={{background:'#F4433612',color:'var(--color-error-main)'}}>Failed to load</span>}
+          {!companyState.loading && !companyState.error && companyState.loadedMonth === activeMo && <span className="filter-tag">{fmt.number(companyRows.length)} rows</span>}
+        </div>
+
+        {companyState.error ? (
+          <div className="no-data" style={{padding:'24px'}}>{companyState.error}</div>
+        ) : companyState.loading || companyState.loadedMonth !== activeMo ? (
+          <div>
+            {[1,2,3,4].map(i=><SkeletonBlock key={i} h="38px" mb="6px" radius="4px" />)}
+          </div>
+        ) : companyRows.length === 0 ? (
+          <div className="no-data" style={{padding:'24px'}}>No company summary rows found for {moFull(activeMo)}.</div>
+        ) : (
+          <div className="table-wrap" style={{marginBottom:0}}>
+            <table className="data-table">
+              <thead><tr>
+                <th>Company</th>
+                <th>Country</th>
+                <th>Status</th>
+                <th className="r">Total ARR</th>
+                <th className="r">ARR Delta</th>
+                <th className="r">Joiners</th>
+                <th className="r">Leavers</th>
+                <th className="r">Active HC</th>
+                <th className="r">Signed HC</th>
+                <th className="r">Flags</th>
+              </tr></thead>
+              <tbody>
+                {topCompanies.map((c,i)=>(
+                  <tr key={c.MATCH_KEY || c.CO_ID || i}>
+                    <td style={{fontWeight:600}}>{c.CO_NAME || c.CO_ID || '—'}</td>
+                    <td>{c.CO_COUNTRY || '—'}</td>
+                    <td>{c.CO_STATUS || '—'}</td>
+                    <td className="r">{fmtARRFull(c.TOTAL_ARR)}</td>
+                    <td className={`r ${Number(c.ARR_DELTA||0)<0?'neg':'pos'}`}>{fmtARRFull(c.ARR_DELTA)}</td>
+                    <td className="r pos">{fmtARRFull(c.ARR_JOINERS)}</td>
+                    <td className="r neg">{fmtARRFull(c.ARR_LEAVERS)}</td>
+                    <td className="r">{fmt.number(c.ACTIVE_HC || 0)}</td>
+                    <td className="r">{fmt.number(c.SIGNED_HC || 0)}</td>
+                    <td className="r">{fmt.number(c.FLAGGED_EE_COUNT || 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
     </div>
@@ -1855,7 +1961,6 @@ const App = () => {
               arrMetrics={arr.arrMetrics}
               arrSummary={arr.arrSummary}
               arrFlagCount={arr.arrFlagCount}
-              arrCompanies={arr.arrCompanies}
             />
           )}
 
