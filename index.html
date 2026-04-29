@@ -12,7 +12,7 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
-/* ── @product Design Tokens ── */
+/* ── Playroll Design Tokens ── */
 :root {
   --color-primary-light:   #AF91EF;
   --color-primary-main:    #5110DD;
@@ -327,6 +327,28 @@ table.sub-table td.neg{color:var(--color-error-main)}
 }
 .no-data{text-align:center;color:var(--text-secondary);padding:48px;font-size:0.8125rem}
 
+
+/* ── Lazy Loading Glimmer ── */
+.glimmer {
+  display:inline-block;
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(90deg,var(--surface-low) 0%,var(--surface-high) 45%,var(--surface-low) 90%);
+  background-size:220% 100%;
+  animation:glimmer 1.15s ease-in-out infinite;
+  border-radius:7px;
+  vertical-align:middle;
+}
+.glimmer.text{height:1em;min-width:52px}
+.glimmer.kpi{height:30px;min-width:96px}
+.glimmer.sub{height:12px;min-width:120px}
+.glimmer.chart{display:block;width:100%;height:100%;min-height:180px;border-radius:var(--radius-sm)}
+.glimmer.badge{height:20px;min-width:88px;border-radius:var(--radius-chip)}
+.glimmer.row{display:block;width:100%;height:14px}
+.loading-overlay-label{display:inline-flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:.75rem;font-weight:500}
+.loading-dot{width:8px;height:8px;border-radius:50%;background:var(--color-primary-main);animation:pulse 1.2s ease-in-out infinite}
+@keyframes glimmer{0%{background-position:140% 0}100%{background-position:-80% 0}}
+
 /* ── Loading / Error ── */
 .center-screen{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
 .spinner{
@@ -347,11 +369,11 @@ table.sub-table td.neg{color:var(--color-error-main)}
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ── CONFIG — replace with your deployed Apps Script URL ──────────────────────
-const APPS_SCRIPT_URL = 
-const ARR_SCRIPT_URL  = 
-const PAYROLL_SCRIPT_URL = 
-
-// ── Formatters ────────────────────────────────────────────────────────────────
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzyGNRRgugXHsiSEyIYbL9zpyCXdfjBA75vaQKItiKPT5LW3QiqC0whbxMX8YoNZYvTCQ/exec';
+const ARR_SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbxx7FbW4andcG0m19KVGvKHJ3TYFIDdIBqbuYqQvAYL-9aSkqgvAngpuRXH26sD54vRGA/exec';
+const PAYROLL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwZseLlemRR_jENQ4E6rRcKEJTFI2rpY9hozeyr99XXcF0Jv_91SlJpM9zUb66nITk/exec';
+const HEALTH_SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbzSbSsSz3QxAbBYCjy0l1Uwg4PnxpcqeSwi0Hmgq7VmDbKOCJ41HcKvoWbnlTn0tnIx/exec'; // ← replace after deploying CustomerHealth_AppScript.gs
+  // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = {
   currency: n => {
     const v = parseFloat(n) || 0;
@@ -386,7 +408,7 @@ const parseMonth = m => {
 
 const monthKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '';
 
-// @product-aligned chart colors: primary purple + semantic palette
+// Playroll-aligned chart colors: primary purple + semantic palette
 const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D','#267EB5','#388E3C'];
 
 const PRIORITY_CONF = {
@@ -403,7 +425,7 @@ const getPriority = (abs, records) => {
   return 'Low';
 };
 
-// Chart.js defaults for @product light theme
+// Chart.js defaults for Playroll light theme
 const CHART_SCALE_DEFAULTS = {
   tickColor: '#49454F',
   gridColor: '#E9E9EA',
@@ -431,6 +453,39 @@ const LoadingScreen = () => (
   </div>
 );
 
+const SkeletonBlock = ({ h='16px', w='100%', mb='8px', radius='6px' }) => (
+  <span className="glimmer" style={{display:'block',height:h,width:w,marginBottom:mb,borderRadius:radius}} />
+);
+
+const Glimmer = ({ variant='text', w=null, h=null, style={} }) => (
+  <span className={`glimmer ${variant}`} style={{width:w || undefined,height:h || undefined,...style}} />
+);
+
+const LoadingLabel = ({ text='Loading data…' }) => (
+  <span className="loading-overlay-label"><span className="loading-dot" />{text}</span>
+);
+
+const ChartGlimmer = ({ height=240, label='Loading chart…' }) => (
+  <div style={{height,position:'relative'}}>
+    <Glimmer variant="chart" h={`${height}px`} />
+    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <LoadingLabel text={label} />
+    </div>
+  </div>
+);
+
+const LoadingTableRows = ({ columns=4, rows=5 }) => (
+  <>
+    {Array.from({length:rows}).map((_,ri)=>(
+      <tr key={`loading-${ri}`}>
+        {Array.from({length:columns}).map((_,ci)=>(
+          <td key={ci} className={ci>0?'r':''}><Glimmer variant="row" /></td>
+        ))}
+      </tr>
+    ))}
+  </>
+);
+
 const ErrorScreen = ({ msg }) => (
   <div className="center-screen">
     <div className="err-title">Failed to load data</div>
@@ -442,16 +497,18 @@ const ErrorScreen = ({ msg }) => (
 );
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
-const KPICard = ({ label, value, sub, sign }) => (
+const KPICard = ({ label, value, sub, sign, loading=false }) => (
   <div className="kpi-card">
     <div className="kpi-label">{label}</div>
-    <div className={`kpi-value${sign==='pos'?' pos':sign==='neg'?' neg':''}`}>{value}</div>
-    {sub && <div className="kpi-sub">{sub}</div>}
+    <div className={`kpi-value${!loading && sign==='pos'?' pos':!loading && sign==='neg'?' neg':''}`}>
+      {loading ? <Glimmer variant="kpi" /> : value}
+    </div>
+    {(sub || loading) && <div className="kpi-sub">{loading ? <Glimmer variant="sub" /> : sub}</div>}
   </div>
 );
 
 // ── TAB 1: OVERVIEW ──────────────────────────────────────────────────────────
-const Overview = ({ rows }) => {
+const Overview = ({ rows, loading=false }) => {
   const stats = useMemo(() => {
     const months = {}, aspects = {};
     let totalAbs = 0, totalNet = 0;
@@ -531,12 +588,12 @@ const Overview = ({ rows }) => {
   return (
     <div className="tab-content">
       <div className="kpi-grid">
-        <KPICard label="Total records"      value={fmt.number(rows.length)} sub="All adjustments" />
-        <KPICard label="Absolute exposure"  value={fmt.currency(totalAbs)} sub="Total financial magnitude" />
-        <KPICard label="Net exposure"       value={fmt.currency(totalNet)} sign={totalNet>=0?'pos':'neg'} />
-        <KPICard label="Avg per adjustment" value={fmt.currency(rows.length?totalAbs/rows.length:0)} />
-        <KPICard label="Unique companies"   value={fmt.number(companies)} />
-        <KPICard label="Unique employees"   value={fmt.number(employees)} />
+        <KPICard label="Total records"      value={fmt.number(rows.length)} sub="All adjustments" loading={loading} />
+        <KPICard label="Absolute exposure"  value={fmt.currency(totalAbs)} sub="Total financial magnitude" loading={loading} />
+        <KPICard label="Net exposure"       value={fmt.currency(totalNet)} sign={totalNet>=0?'pos':'neg'} loading={loading} />
+        <KPICard label="Avg per adjustment" value={fmt.currency(rows.length?totalAbs/rows.length:0)} loading={loading} />
+        <KPICard label="Unique companies"   value={fmt.number(companies)} loading={loading} />
+        <KPICard label="Unique employees"   value={fmt.number(employees)} loading={loading} />
       </div>
 
       <div className="peak-strip">
@@ -550,11 +607,11 @@ const Overview = ({ rows }) => {
       <div className="charts-row">
         <div className="chart-card" style={{flex:2}}>
           <div className="chart-title">Monthly volume &amp; absolute exposure trend</div>
-          <ChartCanvas config={monthlyChartCfg} height={240} />
+          {loading ? <ChartGlimmer height={240} label="Loading finance trend…" /> : <ChartCanvas config={monthlyChartCfg} height={240} />}
         </div>
         <div className="chart-card" style={{flex:1}}>
           <div className="chart-title">Records by primary aspect</div>
-          <ChartCanvas config={donutCfg} height={240} />
+          {loading ? <ChartGlimmer height={240} label="Loading aspect split…" /> : <ChartCanvas config={donutCfg} height={240} />}
         </div>
       </div>
 
@@ -571,7 +628,7 @@ const Overview = ({ rows }) => {
               <th className="r">Avg / record</th>
             </tr></thead>
             <tbody>
-              {Object.entries(stats.aspects).sort((a,b)=>b[1].abs-a[1].abs).map(([pa,d])=>(
+              {loading ? <LoadingTableRows columns={6} rows={6} /> : Object.entries(stats.aspects).sort((a,b)=>b[1].abs-a[1].abs).map(([pa,d])=>(
                 <tr key={pa}>
                   <td>{pa}</td>
                   <td className="r">{fmt.number(d.records)}</td>
@@ -590,7 +647,7 @@ const Overview = ({ rows }) => {
 };
 
 // ── TAB 2: PRODUCT GAPS ──────────────────────────────────────────────────────
-const ProductGaps = ({ rows, taxonomy }) => {
+const ProductGaps = ({ rows, taxonomy, loading=false }) => {
   const [selectedAspect, setSelectedAspect] = useState('Calculator inaccuracy');
   const [expandedIdx, setExpandedIdx]       = useState(null);
 
@@ -663,10 +720,10 @@ const ProductGaps = ({ rows, taxonomy }) => {
         </select>
       </div>
 
-      {gapData.length > 0 && (
+      {(loading || gapData.length > 0) && (
         <div className="chart-card">
-          <div className="chart-title">Absolute exposure by parent category — {selectedAspect}</div>
-          <ChartCanvas config={barChart} height={Math.max(180, gapData.length*36)} />
+          <div className="chart-title">Absolute exposure by parent category — {loading ? <Glimmer variant="text" w="140px" /> : selectedAspect}</div>
+          {loading ? <ChartGlimmer height={240} label="Loading product gap chart…" /> : <ChartCanvas config={barChart} height={Math.max(180, gapData.length*36)} />}
         </div>
       )}
 
@@ -683,7 +740,7 @@ const ProductGaps = ({ rows, taxonomy }) => {
             <th>Priority</th>
           </tr></thead>
           <tbody>
-            {gapData.map((gap,i) => {
+            {loading ? <LoadingTableRows columns={8} rows={7} /> : gapData.map((gap,i) => {
               const pc = PRIORITY_CONF[gap.priority];
               const isOpen = expandedIdx === i;
               return (
@@ -741,7 +798,7 @@ const ProductGaps = ({ rows, taxonomy }) => {
 // ── TAB 3: TREND ANALYSIS ────────────────────────────────────────────────────
 const DRILL_PAGE_SIZE = 25;
 
-const TrendAnalysis = ({ rows, taxonomy }) => {
+const TrendAnalysis = ({ rows, taxonomy, loading=false }) => {
   const [filters, setFilters]         = useState({ primaryAspect:'', parentCat:'', subCat:'', territory:'', company:'' });
   const [metric, setMetric]           = useState('abs');
   const [expandedMonth, setExpanded]  = useState(null);
@@ -906,7 +963,7 @@ const TrendAnalysis = ({ rows, taxonomy }) => {
                 <th className="r">MoM %</th>
               </tr></thead>
               <tbody>
-                {momRows.map((m,i) => {
+                {loading ? <LoadingTableRows columns={5} rows={6} /> : momRows.map((m,i) => {
                   const isOpen = expandedMonth === m.key;
                   return (
                     <React.Fragment key={m.key}>
@@ -1094,7 +1151,7 @@ const fmtARR = n => {
 };
 const fmtARRFull = n => { const v=parseFloat(n)||0,s=v<0?'-':''; return `${s}$${Math.abs(Math.round(v)).toLocaleString()}`; };
 
-const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={} }) => {
+const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, loading=false }) => {
   const [selMonth, setSelMonth] = useState(null);
   const [expandedMo, setExpandedMo] = useState(null);
   const [companyState, setCompanyState] = useState({ loading:false, error:null, loadedMonth:null, rows:[] });
@@ -1206,43 +1263,16 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={} }) => {
   const prevArrPerEE = prevEE > 0 ? prevARR / prevEE : 0;
 
   // Fetch company summary rows only for the currently selected month.
-  useEffect(() => {
-    if (!activeMo || !ARR_SCRIPT_URL) return;
-    if (companyState.loadedMonth === activeMo || companyState.loading) return;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-
-    setCompanyState(s => ({ ...s, loading:true, error:null }));
-
-    fetch(`${ARR_SCRIPT_URL}?mode=companies&month=${encodeURIComponent(activeMo)}`, {
-      method:'GET',
-      signal:controller.signal,
-      cache:'no-store'
-    })
-      .then(async r => {
-        const text = await r.text();
-        if (!r.ok) throw new Error(`Company summary endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
-        try { return JSON.parse(text); }
-        catch (e) { throw new Error(`Company summary endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
-      })
-      .then(d => {
-        if (d.error) throw new Error(d.error);
-        setCompanyState({
-          loading:false,
-          error:null,
-          loadedMonth:activeMo,
-          rows:Array.isArray(d.arrCompanies) ? d.arrCompanies : []
-        });
-      })
-      .catch(err => {
-        const msg = err.name === 'AbortError'
-          ? 'Company summary request timed out after 30 seconds.'
-          : err.message;
-        setCompanyState(s => ({ ...s, loading:false, error:msg, loadedMonth:null, rows:[] }));
-      })
-      .finally(() => clearTimeout(timeout));
-  }, [activeMo]);
+// Company-level ARR drilldown is disabled for now.
+// The current ARR Apps Script only supports ?mode=summary.
+useEffect(() => {
+  setCompanyState({
+    loading: false,
+    error: null,
+    loadedMonth: activeMo || null,
+    rows: []
+  });
+}, [activeMo]);
 
   const companyRows = companyState.loadedMonth === activeMo ? companyState.rows : [];
   const topCompanies = useMemo(() => {
@@ -1268,7 +1298,7 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={} }) => {
     }
   }), [trendData]);
 
-  if (!months.length) return <div className="no-data" style={{padding:'48px'}}>No ARR data available. Ensure "Monthly Summary" tab exists in the ARR sheet and the script is redeployed.</div>;
+  if (!months.length && !loading) return <div className="no-data" style={{padding:'48px'}}>No ARR data available. Ensure "Monthly Summary" tab exists in the ARR sheet and the script is redeployed.</div>;
 
   return (
     <div className="tab-content">
@@ -1295,13 +1325,13 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={} }) => {
           ['ARR lost (leavers)', fmtARR(churnARR), `${fmtARR(gS('active_leaver').ac)} active · ${fmtARR(gS('signed_leaver').ac)} signed`,'neg'],
           ['Pipeline ARR',    fmtARR(pipeARR), 'signed, not yet started', null],
           ['Net new biz',     fmtARR(newBizARR), 'joiners this month', newBizARR>=0?'pos':null],
-        ].map(([label,value,sub,sign])=>(<KPICard key={label} label={label} value={value} sub={sub} sign={sign} />))}
+        ].map(([label,value,sub,sign])=>(<KPICard key={label} label={label} value={value} sub={sub} sign={sign} loading={loading} />))}
       </div>
 
       <div className="charts-row">
         <div className="chart-card" style={{flex:2}}>
           <div className="chart-title">ARR trend — Active / Signed / New hire</div>
-          <ChartCanvas config={trendCfg} height={240} />
+          {loading ? <ChartGlimmer height={240} label="Loading ARR trend…" /> : <ChartCanvas config={trendCfg} height={240} />}
         </div>
         <div className="chart-card" style={{flex:1}}>
           <div className="chart-title">Health snapshot <span style={{fontSize:'0.75rem',fontWeight:400,color:'var(--text-secondary)'}}>{moFull(activeMo)}</span></div>
@@ -1349,7 +1379,7 @@ const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={} }) => {
               <th className="r">New Hire EE</th>
             </tr></thead>
             <tbody>
-              {[...trendData].reverse().map((t,ri) => {
+              {loading ? <LoadingTableRows columns={7} rows={8} /> : [...trendData].reverse().map((t,ri) => {
                 const revIdx  = trendData.length - 1 - ri;
                 const mArr    = monthTotalARR(t.month);
                 const pArr    = revIdx > 0 ? monthTotalARR(months[revIdx-1]) : null;
@@ -1504,6 +1534,11 @@ const IconPayroll = () => (
     <line x1="14" y1="15" x2="18" y2="15"/>
   </svg>
 );
+const IconHealth = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+  </svg>
+);
 
 // ── Dashboard Registry ─────────────────────────────────────────────────────────
 // Add future dashboards here as new entries. Each becomes a sidebar nav item.
@@ -1511,6 +1546,7 @@ const DASHBOARD_NAV = [
   { id:'finance', label:'Finance adjustments', icon:<IconChart />,   group:'Analytics' },
   { id:'arr',     label:'ARR',                icon:<IconARR />,     group:'Analytics' },
   { id:'payroll', label:'Payroll validation',  icon:<IconPayroll />, group:'Payroll'   },
+  { id:'health',  label:'Customer health',     icon:<IconHealth />,  group:'Customer Success' },
 ];
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -1519,7 +1555,7 @@ const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
   return (
     <aside className={`sidebar ${open ? 'open' : 'closed'}`}>
       <div className="sidebar-logo-row">
-        {open && <span className="sidebar-wordmark">@product</span>}
+        {open && <span className="sidebar-wordmark">Playroll</span>}
         <button className="sidebar-toggle" onClick={onToggle} title={open ? 'Collapse' : 'Expand'}>
           {open ? <IconChevronLeft /> : <IconMenu />}
         </button>
@@ -1557,7 +1593,7 @@ const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
   );
 };
 
-// ── Coverage Banner (@product design) ────────────────────────────────────────
+// ── Coverage Banner (Playroll design) ────────────────────────────────────────
 const CoverageBanner = ({ rawCount, cleanedCount }) => {
   const pct     = rawCount ? (cleanedCount / rawCount * 100) : 0;
   const missing = rawCount - cleanedCount;
@@ -1628,6 +1664,19 @@ const HomePage = ({ onNavigate }) => {
       bg:    '#185FA510',
     },
     {
+      id:    'health',
+      label: 'Customer health',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+      ),
+      desc:  'Monitor customer health scores across your portfolio. Track RAG status by account, NPS, CSM sentiment and support ticket trends. Identify at-risk accounts and prioritise outreach.',
+      status:'live',
+      color: '#C0392B',
+      bg:    '#C0392B10',
+    },
+    {
       id:    'hr',
       label: 'HR analytics',
       icon: (
@@ -1636,7 +1685,7 @@ const HomePage = ({ onNavigate }) => {
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
       ),
-      desc:  'Headcount trends, attrition analysis and workforce planning across all @product entities and territories.',
+      desc:  'Headcount trends, attrition analysis and workforce planning across all Playroll entities and territories.',
       status:'soon',
       color: '#BA7517',
       bg:    '#BA751710',
@@ -1691,10 +1740,10 @@ const HomePage = ({ onNavigate }) => {
         </div>
 
         <h1 style={{fontSize:'1.75rem',fontWeight:700,color:'var(--text-primary)',marginBottom:'10px',letterSpacing:'-0.02em',lineHeight:1.2}}>
-          @product Internal Analytics
+          Playroll Internal Analytics
         </h1>
         <p style={{fontSize:'0.9375rem',color:'var(--text-secondary)',maxWidth:'540px',lineHeight:1.65,marginBottom:'24px'}}>
-          A single place to understand financial adjustments, ARR trends, and operational performance across the @product portfolio. Built for the internal team.
+          A single place to understand financial adjustments, ARR trends, and operational performance across the Playroll portfolio. Built for the internal team.
         </p>
 
         {/* Under construction notice */}
@@ -1785,7 +1834,7 @@ const HomePage = ({ onNavigate }) => {
         flexWrap:'wrap',gap:'10px',
       }}>
         <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
-          @product Internal Analytics · Beta v0.1 · For internal use only
+          Playroll Internal Analytics · Beta v0.1 · For internal use only
         </div>
         <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
           Data refreshes when the page is reloaded
@@ -1797,6 +1846,9 @@ const HomePage = ({ onNavigate }) => {
 };
 
 // ── PAYROLL DASHBOARD ─────────────────────────────────────────────────────────
+// Demo version: reads only the pre-processed Payroll_Dashboard_Summary row.
+// Details and flags are intentionally disabled for the demo to avoid loading
+// employee-level rows from Google Sheets.
 
 const fmtUSD = n => {
   const v = parseFloat(n) || 0;
@@ -1808,21 +1860,32 @@ const fmtUSD = n => {
 };
 const fmtUSDFull = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(parseFloat(n)||0);
 const fmtPct = n => { const v = parseFloat(n)||0; return `${v>0?'+':''}${v.toFixed(1)}%`; };
-const fmtDelta = n => { const v = parseFloat(n)||0; if(!v) return '—'; return `${v>0?'+':''}${fmtUSD(v)}`; };
+const fmtSignedUSD = n => { const v=parseFloat(n)||0; if(!v) return '$0'; return `${v>0?'+':''}${fmtUSD(v)}`; };
+const safeArr = v => Array.isArray(v) ? v : [];
+const monthFullLabel = value => {
+  if (!value) return '—';
+  const d = new Date(`${String(value).slice(0,10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('en-GB',{month:'long',year:'numeric',timeZone:'UTC'});
+};
 
 const LIFE_BADGE = {
-  ACTIVE:                { bg:'#EAF3DE', color:'#27500A' },
-  NEW_STARTER:           { bg:'#E6F1FB', color:'#0C447C' },
-  TERMINATION:           { bg:'#FCEBEB', color:'#791F1F' },
-  ACTIVE_WITH_FUTURE_END:{ bg:'#FEF3E2', color:'#7B4A00' },
+  ACTIVE:                              { bg:'#EAF3DE', color:'#27500A' },
+  ACTIVE_WITH_FUTURE_END:             { bg:'#FEF3E2', color:'#7B4A00' },
+  NEW_STARTER:                        { bg:'#E6F1FB', color:'#0C447C' },
+  PRIOR_MONTH_NEW_STARTER:            { bg:'#E6F1FB', color:'#0C447C' },
+  PRIOR_MONTH_NEW_STARTER_PRORATED:   { bg:'#EEEDFE', color:'#3C3489' },
+  TERMINATION:                        { bg:'#FCEBEB', color:'#791F1F' },
+  PREVIOUSLY_TERMINATED:              { bg:'#FCEBEB', color:'#791F1F' },
+  SAME_MONTH_TERMINATION:             { bg:'#FFF4E5', color:'#8A4B00' },
+  FUTURE_STARTER:                     { bg:'#F1EFE8', color:'#5F5E5A' },
 };
 const PAY_BADGE = {
   LOCAL:   { bg:'#E6F1FB', color:'#0C447C' },
   PEGGED:  { bg:'#EEEDFE', color:'#3C3489' },
   FOREIGN: { bg:'#E1F5EE', color:'#085041' },
 };
-const lifeBadge = v => LIFE_BADGE[v] || { bg:'#F1EFE8', color:'#5F5E5A' };
-const payBadge  = v => PAY_BADGE[v]  || { bg:'#F1EFE8', color:'#5F5E5A' };
+const badgeFor = (map, key) => map[key] || { bg:'#F1EFE8', color:'#5F5E5A' };
 
 const Badge = ({ label, bg, color }) => (
   <span style={{
@@ -1831,594 +1894,521 @@ const Badge = ({ label, bg, color }) => (
   }}>{label}</span>
 );
 
-// ── Payroll Overview Tab ──────────────────────────────────────────────────────
-const PayrollOverview = ({ deltas, flags, meta }) => {
-  const [terMode, setTerMode] = useState('total');
-  const terChartRef = useRef(null);
-  const terInstRef  = useRef(null);
-  const payChartRef = useRef(null);
-  const payInstRef  = useRef(null);
-
-  const stats = useMemo(() => {
-    const active      = deltas.filter(r => r.LIFECYCLE_STATUS !== 'TERMINATION' && r.MOVEMENT_TYPE !== 'LEAVER');
-    const newStarters = deltas.filter(r => r.LIFECYCLE_STATUS === 'NEW_STARTER'  || r.MOVEMENT_TYPE === 'JOINER');
-    const terminations= deltas.filter(r => r.LIFECYCLE_STATUS === 'TERMINATION'  || r.MOVEMENT_TYPE === 'LEAVER');
-    const salChanged  = deltas.filter(r => r.SALARY_PAYMENT_CHANGED).length;
-    const statusChg   = deltas.filter(r => r.STATUS_CHANGED).length;
-    const dateChg     = deltas.filter(r => r.START_DATE_CHANGED || r.END_DATE_CHANGED).length;
-    const staleCount  = flags.length;
-
-    const currTotal = deltas.reduce((s,r) => s + (parseFloat(r.USD_TOT_EX)||0), 0);
-    const prevTotal = deltas.reduce((s,r) => s + (parseFloat(r.USD_TOT_EX)||0) - (parseFloat(r.USD_TOT_EX_DELTA)||0), 0);
-    const netDelta  = currTotal - prevTotal;
-    const netPct    = prevTotal ? (netDelta / prevTotal * 100) : 0;
-
-    // Territory totals
-    const terMap = {};
-    deltas.forEach(r => {
-      const ter = r.CO_ID || 'Unknown';
-      if (!terMap[ter]) terMap[ter] = { ter, curr:0, prev:0, delta:0 };
-      terMap[ter].curr  += parseFloat(r.USD_TOT_EX)||0;
-      terMap[ter].delta += parseFloat(r.USD_TOT_EX_DELTA)||0;
-      terMap[ter].prev  += (parseFloat(r.USD_TOT_EX)||0) - (parseFloat(r.USD_TOT_EX_DELTA)||0);
-    });
-    const terArr = Object.values(terMap);
-    const topByTotal = [...terArr].sort((a,b)=>b.curr-a.curr).slice(0,10);
-    const topByMov   = [...terArr].sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta)).slice(0,10);
-
-    // Payment type breakdown
-    const payMap = { LOCAL:0, PEGGED:0, FOREIGN:0 };
-    deltas.forEach(r => { const p = r.SALARY_PAYMENT||'LOCAL'; payMap[p] = (payMap[p]||0)+1; });
-
-    // Top movers
-    const topMovers = [...deltas]
-      .filter(r => r.USD_TOT_EX_DELTA !== null && r.USD_TOT_EX_DELTA !== 0)
-      .sort((a,b) => Math.abs(parseFloat(b.USD_TOT_EX_DELTA)||0) - Math.abs(parseFloat(a.USD_TOT_EX_DELTA)||0))
-      .slice(0,5);
-
-    return { currTotal, prevTotal, netDelta, netPct, newStarters: newStarters.length,
-      terminations: terminations.length, salChanged, statusChg, dateChg, staleCount,
-      topByTotal, topByMov, payMap, topMovers, headcount: deltas.length };
-  }, [deltas, flags]);
-
-  // Territory chart
-  useEffect(() => {
-    if (!terChartRef.current) return;
-    if (terInstRef.current) { terInstRef.current.destroy(); terInstRef.current = null; }
-    const data = terMode === 'total' ? stats.topByTotal : stats.topByMov;
-    const cfg = terMode === 'total' ? {
-      type:'bar',
-      data:{
-        labels: data.map(t=>t.ter),
-        datasets:[
-          { label:'Prev', data:data.map(t=>t.prev), backgroundColor:'#CAC4CF', borderRadius:3 },
-          { label:'Curr', data:data.map(t=>t.curr), backgroundColor:'#5110DD', borderRadius:3 },
-        ],
-      },
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false } },
-        scales:{
-          x:{ grid:{ display:false }, ticks:{ font:{ size:11 }, color:'#49454F', maxRotation:30 } },
-          y:{ grid:{ color:'#E9E9EA' }, ticks:{ font:{ size:11 }, color:'#49454F', callback:v=>fmtUSD(v) } },
-        },
-      },
-    } : {
-      type:'bar',
-      data:{
-        labels: data.map(t=>t.ter),
-        datasets:[{
-          label:'Delta',
-          data: data.map(t=>t.delta),
-          backgroundColor: data.map(t=>t.delta>=0 ? '#66BB6A' : '#F44336'),
-          borderRadius:3,
-        }],
-      },
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false } },
-        scales:{
-          x:{ grid:{ display:false }, ticks:{ font:{ size:11 }, color:'#49454F', maxRotation:30 } },
-          y:{ grid:{ color:'#E9E9EA' }, ticks:{ font:{ size:11 }, color:'#49454F', callback:v=>(v>=0?'+':'')+fmtUSD(v) } },
-        },
-      },
-    };
-    terInstRef.current = new Chart(terChartRef.current, cfg);
-  }, [terMode, stats]);
-
-  // Payment type donut
-  useEffect(() => {
-    if (!payChartRef.current) return;
-    if (payInstRef.current) { payInstRef.current.destroy(); payInstRef.current = null; }
-    payInstRef.current = new Chart(payChartRef.current, {
-      type:'doughnut',
-      data:{
-        labels:['Local','Pegged','Foreign'],
-        datasets:[{ data:[stats.payMap.LOCAL||0, stats.payMap.PEGGED||0, stats.payMap.FOREIGN||0],
-          backgroundColor:['#5110DD','#AFA9EC','#1D9E75'], borderWidth:0, hoverOffset:4 }],
-      },
-      options:{ responsive:true, maintainAspectRatio:false, cutout:'68%', plugins:{ legend:{ display:false } } },
-    });
-  }, [stats]);
-
-  const prevLabel = meta.prevMonth ? new Date(meta.prevMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—';
-  const currLabel = meta.currMonth ? new Date(meta.currMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—';
-
+const PayrollMiniBar = ({ value, max }) => {
+  const v = parseFloat(value) || 0;
+  const pct = max ? Math.min(100, Math.abs(v) / max * 100) : 0;
+  const color = v < 0 ? 'var(--color-error-main)' : 'var(--color-success-main)';
   return (
-    <div className="tab-content">
-      {/* KPI strip */}
-      <div className="kpi-grid">
-        {[
-          ['Headcount',         String(stats.headcount),               'Active employees',                 null],
-          ['USD Total (curr)',  fmtUSDFull(stats.currTotal),           currLabel,                          null],
-          ['USD Total (prev)',  fmtUSDFull(stats.prevTotal),           prevLabel,                          null],
-          ['Net USD Delta',     fmtDelta(stats.netDelta),              fmtPct(stats.netPct),               stats.netDelta>=0?'pos':'neg'],
-          ['New Starters',      String(stats.newStarters),             `Joining ${currLabel}`,             'pos'],
-          ['Terminations',      String(stats.terminations),            `Leaving ${currLabel}`,             stats.terminations>0?'neg':null],
-        ].map(([label,value,sub,sign])=>(
-          <KPICard key={label} label={label} value={value} sub={sub} sign={sign} />
-        ))}
+    <div style={{display:'flex',alignItems:'center',gap:'8px',minWidth:'130px'}}>
+      <div style={{height:'7px',background:'var(--surface-high)',borderRadius:99,overflow:'hidden',flex:1}}>
+        <div style={{height:'100%',width:`${pct}%`,background:color,borderRadius:99}} />
       </div>
-
-      {/* Secondary strip */}
-      <div className="peak-strip" style={{marginBottom:'20px'}}>
-        {[
-          ['Salary changes',  stats.salChanged,  stats.salChanged>0  ? 'var(--color-warning-main)' : 'var(--text-primary)'],
-          ['Status changes',  stats.statusChg,   stats.statusChg>0   ? 'var(--color-warning-main)' : 'var(--text-primary)'],
-          ['Date changes',    stats.dateChg,      stats.dateChg>0     ? 'var(--color-warning-main)' : 'var(--text-primary)'],
-          ['Stale records',   stats.staleCount,   stats.staleCount>0  ? 'var(--color-error-main)'   : 'var(--text-primary)'],
-        ].map(([label,val,color])=>(
-          <div key={label} className="peak-item">
-            <span className="peak-label">{label}</span>
-            <span className="peak-val" style={{color}}>{val}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Territory chart */}
-      <div className="chart-card">
-        <div className="chart-title" style={{justifyContent:'space-between'}}>
-          <div>
-            <div>{terMode==='total' ? 'Top 10 territories by USD total' : 'Top 10 territories by USD movement'}</div>
-            <div style={{fontSize:'0.75rem',fontWeight:400,color:'var(--text-secondary)',marginTop:'2px'}}>
-              {terMode==='total' ? `${currLabel} vs ${prevLabel}` : `Largest absolute delta — ${currLabel} vs ${prevLabel}`}
-            </div>
-          </div>
-          <div style={{display:'flex',gap:0,border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',overflow:'hidden'}}>
-            {[['total','By total'],['movement','By movement']].map(([m,l])=>(
-              <button key={m} onClick={()=>setTerMode(m)} style={{
-                padding:'6px 14px', border:'none', cursor:'pointer', fontSize:'0.75rem', fontWeight:500,
-                background: terMode===m ? 'var(--color-primary-main)' : 'transparent',
-                color: terMode===m ? '#fff' : 'var(--text-secondary)',
-                transition:'background .15s, color .15s',
-              }}>{l}</button>
-            ))}
-          </div>
-        </div>
-        {terMode==='total' && (
-          <div style={{display:'flex',gap:'14px',marginBottom:'10px',fontSize:'0.6875rem',color:'var(--text-secondary)'}}>
-            <span style={{display:'flex',alignItems:'center',gap:'4px'}}><span style={{width:10,height:10,borderRadius:2,background:'#CAC4CF',display:'inline-block'}}/>{prevLabel}</span>
-            <span style={{display:'flex',alignItems:'center',gap:'4px'}}><span style={{width:10,height:10,borderRadius:2,background:'#5110DD',display:'inline-block'}}/>{currLabel}</span>
-          </div>
-        )}
-        <div style={{position:'relative',width:'100%',height:'220px'}}>
-          <canvas ref={terChartRef} style={{height:'220px',maxHeight:'220px'}} />
-        </div>
-      </div>
-
-      {/* Bottom row: donut + top movers */}
-      <div className="charts-row">
-        <div className="chart-card" style={{flex:1,marginBottom:0}}>
-          <div className="chart-title">Payment type breakdown</div>
-          <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'10px',fontSize:'0.6875rem',color:'var(--text-secondary)'}}>
-            {[['#5110DD','Local',stats.payMap.LOCAL||0],['#AFA9EC','Pegged',stats.payMap.PEGGED||0],['#1D9E75','Foreign',stats.payMap.FOREIGN||0]].map(([c,l,n])=>(
-              <span key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                <span style={{width:8,height:8,borderRadius:'50%',background:c,display:'inline-block'}}/>
-                {l} {n}
-              </span>
-            ))}
-          </div>
-          <div style={{position:'relative',height:'160px'}}>
-            <canvas ref={payChartRef} style={{height:'160px',maxHeight:'160px'}} />
-          </div>
-        </div>
-
-        <div className="chart-card" style={{flex:1.6,marginBottom:0}}>
-          <div className="chart-title">Top movers (USD delta)</div>
-          <div className="table-wrap" style={{marginBottom:0}}>
-            <table className="data-table">
-              <thead><tr>
-                <th>Employee</th><th className="r">Prev ({prevLabel})</th><th className="r">Curr ({currLabel})</th><th className="r">Delta</th>
-              </tr></thead>
-              <tbody>
-                {stats.topMovers.length === 0 && (
-                  <tr><td colSpan={4} className="no-data">No movements this cycle</td></tr>
-                )}
-                {stats.topMovers.map(r => {
-                  const d = parseFloat(r.USD_TOT_EX_DELTA)||0;
-                  const prev = (parseFloat(r.USD_TOT_EX)||0) - d;
-                  const curr = parseFloat(r.USD_TOT_EX)||0;
-                  return (
-                    <tr key={r.DELTA_KEY||r.EE_ID}>
-                      <td style={{fontWeight:500}}>{r.EE_NAME||'—'}</td>
-                      <td className="r">{prev ? fmtUSD(prev) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
-                      <td className="r">{curr ? fmtUSD(curr) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
-                      <td className={`r ${d>0?'pos':'neg'}`} style={{fontWeight:600}}>{fmtDelta(d)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      <span style={{fontSize:'0.75rem',fontWeight:600,color}}>{fmtSignedUSD(v)}</span>
     </div>
   );
 };
 
-// ── Payroll Details Tab ───────────────────────────────────────────────────────
-const PayrollDetails = ({ deltas, meta }) => {
-  const [filterTer,  setFilterTer]  = useState('');
-  const [filterLife, setFilterLife] = useState('');
-  const [filterPay,  setFilterPay]  = useState('');
-  const [changesOnly,setChangesOnly]= useState(false);
-  const [expanded,   setExpanded]   = useState({});
-
-  const territories  = useMemo(()=>[...new Set(deltas.map(r=>r.CO_ID).filter(Boolean))].sort(),[deltas]);
-  const lifecycles   = useMemo(()=>[...new Set(deltas.map(r=>r.LIFECYCLE_STATUS).filter(Boolean))].sort(),[deltas]);
-  const payTypes     = useMemo(()=>[...new Set(deltas.map(r=>r.SALARY_PAYMENT).filter(Boolean))].sort(),[deltas]);
-
-  const filtered = useMemo(()=>deltas.filter(r=>{
-    if (filterTer  && r.CO_ID           !== filterTer)  return false;
-    if (filterLife && r.LIFECYCLE_STATUS !== filterLife) return false;
-    if (filterPay  && r.SALARY_PAYMENT  !== filterPay)  return false;
-    if (changesOnly && !r.ANY_CHANGE) return false;
-    return true;
-  }),[deltas,filterTer,filterLife,filterPay,changesOnly]);
-
-  const toggleRow = id => setExpanded(e=>({...e,[id]:!e[id]}));
-
-  const prevLabel = meta.prevMonth ? new Date(meta.prevMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : 'Prev';
-  const currLabel = meta.currMonth ? new Date(meta.currMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : 'Curr';
-
-  const CurrencyBlock = ({ label, bg, color, r, prefix, fields }) => {
-    const rows = fields.map(([name,curr,prev,delta,pct])=>{
-      const c = parseFloat(r[curr])||0;
-      const d = parseFloat(r[delta])||0;
-      const p = c - d;
-      const pctVal = r[pct] ? parseFloat(r[pct]) : null;
-      return { name, c, d, p, pctVal };
-    });
-    if (rows.every(row=>!row.c && !row.p)) return null;
-    return (
-      <div style={{marginBottom:'12px'}}>
-        <span style={{display:'inline-block',background:bg,color,fontSize:'0.625rem',fontWeight:600,
-          textTransform:'uppercase',letterSpacing:'.08em',padding:'2px 8px',borderRadius:'4px',marginBottom:'6px'}}>
-          {label}
-        </span>
-        <table className="sub-table">
-          <thead><tr><th>Field</th><th className="r">{prevLabel}</th><th className="r">{currLabel}</th><th className="r">Delta</th></tr></thead>
-          <tbody>
-            {rows.map(({name,c,p,d,pctVal})=>(
-              <tr key={name}>
-                <td>{name}</td>
-                <td className="r">{p ? `${prefix}${Math.abs(p).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—'}</td>
-                <td className="r">{c ? `${prefix}${Math.abs(c).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—'}</td>
-                <td className={`r ${d>0?'pos':d<0?'neg':''}`} style={{fontWeight:500}}>
-                  {d !== 0 ? `${d>0?'+':''}${prefix}${Math.abs(d).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—'}
-                  {pctVal !== null && d !== 0 && <span style={{fontSize:'0.625rem',opacity:.7,marginLeft:'3px'}}>({fmtPct(pctVal)})</span>}
+const PayrollJsonTable = ({ rows, columns, empty='No data available.' }) => {
+  if (!rows || !rows.length) return <div className="no-data" style={{padding:'24px'}}>{empty}</div>;
+  return (
+    <div className="table-wrap" style={{marginBottom:0}}>
+      <table className="data-table">
+        <thead>
+          <tr>{columns.map(c => <th key={c.key} className={c.align==='right'?'r':''}>{c.label}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((row, idx) => (
+            <tr key={idx}>
+              {columns.map(c => (
+                <td key={c.key} className={c.align==='right'?'r':''}>
+                  {c.render ? c.render(row, idx) : (row[c.key] ?? <Glimmer variant="text" />)}
                 </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const PayrollOverview = ({ summary, meta, loading=false }) => {
+  const [territoryLimit, setTerritoryLimit] = useState(12);
+  const [moverLimit, setMoverLimit] = useState(10);
+
+  // Keep hook order stable: never return before all hooks have run.
+  // While data is loading or missing, render the same cards/tables with placeholder values.
+  const hasSummary = !!(summary && summary.CURR_MONTH);
+  const isLoadingShell = loading || !hasSummary;
+  const showNoSummaryNote = !loading && !hasSummary;
+
+  const displaySummary = hasSummary ? summary : {
+    SUMMARY_KEY: '—', PREV_MONTH: '', CURR_MONTH: '', LAST_UPDATED: '',
+    PAYMENT_TYPE_JSON: [], TERRITORY_JSON: [], LIFECYCLE_JSON: [], TOP_MOVERS_JSON: [],
+    TOTAL_EMPLOYEES: null, ACTIVE_EMPLOYEES: null, NEW_STARTERS: null, TERMINATIONS: null,
+    PRIOR_MONTH_NEW_STARTERS: null, SAME_MONTH_TERMINATIONS: null,
+    CURRENT_MONTH_NEW_STARTER_TERMINATIONS: null,
+    STATUS_CHANGE_COUNT: null, SALARY_PAYMENT_CHANGE_COUNT: null,
+    DATE_CHANGE_COUNT: null, ANY_CHANGE_COUNT: null,
+    PREV_USD_TOT_EX: null, CURR_USD_TOT_EX: null,
+    USD_TOT_EX_DELTA: null, USD_TOT_EX_DELTA_PCT: null
   };
 
+  summary = displaySummary;
+
+  const emptyRows = count => Array.from({ length: count }, () => ({}));
+  const showValue = (value, formatter) => isLoadingShell ? <Glimmer variant="text" /> : formatter(value);
+  const showMoney = value => showValue(value, fmtUSD);
+  const showSignedMoney = value => showValue(value, fmtSignedUSD);
+  const showNumber = value => showValue(value, fmt.number);
+  const showPct = value => showValue(value, fmtPct);
+
+  const paymentRows = isLoadingShell ? emptyRows(3) : safeArr(summary.PAYMENT_TYPE_JSON);
+  const territoryRows = isLoadingShell ? emptyRows(8) : safeArr(summary.TERRITORY_JSON);
+  const lifecycleRows = isLoadingShell ? emptyRows(6) : safeArr(summary.LIFECYCLE_JSON);
+  const topMovers = isLoadingShell ? emptyRows(8) : safeArr(summary.TOP_MOVERS_JSON);
+  const maxTerritoryDelta = Math.max(...territoryRows.map(r => Math.abs(parseFloat(r.usdDelta)||0)), 1);
+  const maxMoverDelta = Math.max(...topMovers.map(r => Math.abs(parseFloat(r.usdDelta)||0)), 1);
+  const deltaSign = (parseFloat(summary.USD_TOT_EX_DELTA)||0) >= 0 ? 'pos' : 'neg';
+
+  const paymentChart = useMemo(() => ({
+    type:'doughnut',
+    data:{
+      labels: paymentRows.map(r=>r.paymentType || 'Unknown'),
+      datasets:[{ data:paymentRows.map(r=>Number(r.currUsdTotal||0)), backgroundColor:['#5110DD','#36B1FF','#66BB6A','#FFA726'], borderWidth:0 }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:'bottom', labels:{ color:'#49454F', font:{family:'Poppins',size:11}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.label}: ${fmtUSDFull(ctx.parsed)}` } }
+      }
+    }
+  }), [summary.SUMMARY_KEY]);
+
+  const lifecycleChart = useMemo(() => ({
+    type:'bar',
+    data:{
+      labels: lifecycleRows.map(r=>String(r.lifecycleStatus || 'Unknown').replace(/_/g,' ')),
+      datasets:[{ label:'Employees', data:lifecycleRows.map(r=>Number(r.employeeCount||0)), backgroundColor:'#5110DD30', borderColor:'#5110DD', borderWidth:1.5, borderRadius:6 }]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => `${fmt.number(ctx.parsed.x)} employees` } } },
+      scales:{
+        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ color:'#E9E9EA' } },
+        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ display:false } }
+      }
+    }
+  }), [summary.SUMMARY_KEY]);
+
   return (
     <div className="tab-content">
-      <div className="filter-panel">
-        <div className="filter-group">
-          <label>Territory</label>
-          <select className="f-select" value={filterTer} onChange={e=>setFilterTer(e.target.value)}>
-            <option value="">All territories</option>
-            {territories.map(t=><option key={t} value={t}>{t}</option>)}
-          </select>
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Payroll validation overview</h2>
+          <p className="section-sub">
+            {isLoadingShell ? 'Loading payroll summary…' : `Comparing ${monthFullLabel(summary.PREV_MONTH)} to ${monthFullLabel(summary.CURR_MONTH)} · summary-only demo view`}
+          </p>
         </div>
-        <div className="filter-group">
-          <label>Lifecycle</label>
-          <select className="f-select" value={filterLife} onChange={e=>setFilterLife(e.target.value)}>
-            <option value="">All statuses</option>
-            {lifecycles.map(l=><option key={l} value={l}>{l.replace(/_/g,' ')}</option>)}
-          </select>
-        </div>
-        <div className="filter-group">
-          <label>Payment type</label>
-          <select className="f-select" value={filterPay} onChange={e=>setFilterPay(e.target.value)}>
-            <option value="">All types</option>
-            {payTypes.map(p=><option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="filter-group" style={{minWidth:'auto',justifyContent:'flex-end'}}>
-          <label>&nbsp;</label>
-          <label style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'0.8125rem',color:'var(--text-secondary)',fontWeight:500,padding:'7px 0'}}>
-            <input type="checkbox" checked={changesOnly} onChange={e=>setChangesOnly(e.target.checked)} style={{accentColor:'var(--color-primary-main)'}}/>
-            Changes only
-          </label>
-        </div>
-        <div style={{marginLeft:'auto',alignSelf:'flex-end',fontSize:'0.75rem',color:'var(--text-secondary)',paddingBottom:'6px'}}>
-          {filtered.length} of {deltas.length} employees
+        <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',textAlign:'right'}}>
+          <div>Summary key: <strong>{isLoadingShell ? <Glimmer variant="text" w="130px" /> : summary.SUMMARY_KEY}</strong></div>
+          <div>Last updated: {isLoadingShell ? <Glimmer variant="text" w="150px" /> : (summary.LAST_UPDATED || meta?.generatedAt || '—')}</div>
         </div>
       </div>
 
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead><tr>
-            <th style={{width:'28px'}}></th>
-            <th>Employee</th>
-            <th>Lifecycle</th>
-            <th>Payment</th>
-            <th className="r">USD {prevLabel}</th>
-            <th className="r">USD {currLabel}</th>
-            <th className="r">Delta</th>
-            <th className="r">% Chg</th>
-          </tr></thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr><td colSpan={8} className="no-data">No employees match the current filters</td></tr>
-            )}
-            {filtered.map(r => {
-              const id   = r.DELTA_KEY || r.EE_ID || Math.random();
-              const d    = parseFloat(r.USD_TOT_EX_DELTA)||0;
-              const curr = parseFloat(r.USD_TOT_EX)||0;
-              const prev = curr - d;
-              const pct  = prev && d ? (d/Math.abs(prev)*100) : null;
-              const lbg  = lifeBadge(r.LIFECYCLE_STATUS);
-              const pbg  = payBadge(r.SALARY_PAYMENT);
-              const isOpen = !!expanded[id];
+      {showNoSummaryNote && (
+        <div className="chart-card" style={{border:'1px dashed var(--container-outline-variant)'}}>
+          <div className="section-title">No payroll summary available yet</div>
+          <p className="section-sub" style={{marginTop:'6px'}}>Run the n8n workflow to populate Payroll_Dashboard_Summary. The dashboard layout is visible below and will populate automatically once data is returned.</p>
+        </div>
+      )}
 
-              // Change indicator dots
-              const dots = [];
-              if (r.SALARY_PAYMENT_CHANGED) dots.push({ bg:'#FFA726', title:'Salary changed' });
-              if (r.START_DATE_CHANGED)     dots.push({ bg:'#185FA5', title:'Start date changed' });
-              if (r.END_DATE_CHANGED)       dots.push({ bg:'#F44336', title:'End date changed' });
-
-              const hasSal = r.SAL_TOT_EX !== null && r.SAL_TOT_EX !== undefined;
-
-              return (
-                <React.Fragment key={id}>
-                  <tr className={`gap-row${isOpen?' open':''}`} onClick={()=>toggleRow(id)}>
-                    <td className="expand-cell">
-                      <span style={{display:'inline-block',transition:'transform .15s',transform:isOpen?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
-                    </td>
-                    <td>
-                      <span style={{fontWeight:600,marginRight:'4px'}}>{r.EE_NAME||'—'}</span>
-                      {dots.map((dot,i)=>(
-                        <span key={i} title={dot.title} style={{display:'inline-block',width:'5px',height:'5px',borderRadius:'50%',background:dot.bg,marginLeft:'2px',verticalAlign:'middle'}}/>
-                      ))}
-                      <div style={{fontSize:'0.6875rem',color:'var(--text-secondary)',marginTop:'1px'}}>{r.CO_ID||'—'}</div>
-                    </td>
-                    <td><Badge label={(r.LIFECYCLE_STATUS||'—').replace(/_/g,' ')} bg={lbg.bg} color={lbg.color} /></td>
-                    <td><Badge label={r.SALARY_PAYMENT||'—'} bg={pbg.bg} color={pbg.color} /></td>
-                    <td className="r">{prev ? fmtUSD(prev) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
-                    <td className="r">{curr ? fmtUSD(curr) : <span style={{color:'var(--text-disabled)'}}>—</span>}</td>
-                    <td className={`r ${d>0?'pos':d<0?'neg':''}`} style={{fontWeight:500}}>{d!==0?fmtDelta(d):'—'}</td>
-                    <td className={`r ${pct!==null&&pct>0?'pos':pct!==null&&pct<0?'neg':''}`}>
-                      {pct!==null && d!==0 ? fmtPct(pct) : '—'}
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr>
-                      <td colSpan={8} className="detail-td">
-                        <div className="detail-panel">
-                          <div style={{display:'flex',gap:'20px',flexWrap:'wrap'}}>
-                            {/* Currency blocks */}
-                            <div style={{flex:2,minWidth:'300px'}}>
-                              <div className="detail-sub-hdr" style={{marginBottom:'14px'}}>Currency breakdown</div>
-                              <CurrencyBlock label="USD — Normalised" bg="#E6F1FB" color="#0C447C" r={r} prefix="$"
-                                fields={[
-                                  ['Base salary',    'USD_BAS',    null,'USD_BAS_DELTA',   'USD_BAS_PCT'],
-                                  ['Employer tax',   'USD_ER',     null,'USD_ER_DELTA',    'USD_ER_PCT'],
-                                  ['Total excl. fee','USD_TOT_EX', null,'USD_TOT_EX_DELTA','USD_TOT_EX_PCT'],
-                                  ['FX cost',        'USD_FX',     null,'USD_FX_DELTA',    'USD_FX_PCT'],
-                                ]}
-                              />
-                              <CurrencyBlock label="LOC — Local currency" bg="#F1EFE8" color="#5F5E5A" r={r} prefix=""
-                                fields={[
-                                  ['Base salary',    'LOC_BAS',    null,'LOC_BAS_DELTA',   null],
-                                  ['Employer tax',   'LOC_ER',     null,'LOC_ER_DELTA',    null],
-                                  ['Total excl. fee','LOC_TOT_EX', null,'LOC_TOT_EX_DELTA',null],
-                                  ['FX cost',        'LOC_FX',     null,'LOC_FX_DELTA',    null],
-                                ]}
-                              />
-                              {hasSal && (
-                                <CurrencyBlock label="SAL — Salary payment currency" bg="#EEEDFE" color="#3C3489" r={r} prefix="$"
-                                  fields={[
-                                    ['Base salary',    'SAL_BAS',    null,'SAL_BAS_DELTA',   null],
-                                    ['Employer tax',   'SAL_ER',     null,'SAL_ER_DELTA',    null],
-                                    ['Total excl. fee','SAL_TOT_EX', null,'SAL_TOT_EX_DELTA',null],
-                                  ]}
-                                />
-                              )}
-                            </div>
-                            {/* Record metadata */}
-                            <div style={{flex:1,minWidth:'180px'}}>
-                              <div className="detail-sub-hdr" style={{marginBottom:'14px'}}>Record info</div>
-                              <table className="sub-table">
-                                <tbody>
-                                  {[
-                                    ['Movement',         (r.MOVEMENT_TYPE||'—')],
-                                    ['Lifecycle',        (r.LIFECYCLE_STATUS||'—').replace(/_/g,' ')],
-                                    ['Payment type',     r.SALARY_PAYMENT||'—'],
-                                    ['Prev record type', r.PREV_TYPE||'—'],
-                                    ['Curr record type', r.CURR_TYPE||'—'],
-                                    ['Record movement',  r.RECORD_MOVEMENT||'—'],
-                                    ['Prev start date',  r.PREV_START_DATE||'—'],
-                                    ['Curr start date',  r.CURR_START_DATE||'—'],
-                                    ['Prev end date',    r.PREV_END_DATE||'—'],
-                                    ['Curr end date',    r.CURR_END_DATE||'—'],
-                                    ...(r.SALARY_PAYMENT_CHANGED ? [['Salary changed','Yes']] : []),
-                                    ...(r.STATUS_CHANGED         ? [['Status changed','Yes']] : []),
-                                    ...(r.START_DATE_CHANGED     ? [['Start date changed','Yes']] : []),
-                                    ...(r.END_DATE_CHANGED       ? [['End date changed','Yes']] : []),
-                                  ].map(([k,v])=>(
-                                    <tr key={k}>
-                                      <td>{k}</td>
-                                      <td className="r" style={{color:'var(--text-primary)',fontWeight:500}}>{v}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="kpi-grid">
+        <KPICard label="Current payroll total" value={showMoney(summary.CURR_USD_TOT_EX)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmtPct(summary.USD_TOT_EX_DELTA_PCT)} vs previous month`} sign={deltaSign} />
+        <KPICard label="Previous payroll total" value={showMoney(summary.PREV_USD_TOT_EX)} sub="Comparison base" />
+        <KPICard label="Net payroll movement" value={showSignedMoney(summary.USD_TOT_EX_DELTA)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.ANY_CHANGE_COUNT)} employees changed`} sign={deltaSign} />
+        <KPICard label="Total employees" value={showNumber(summary.TOTAL_EMPLOYEES)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.ACTIVE_EMPLOYEES)} active employees`} />
+        <KPICard label="New starters" value={showNumber(summary.NEW_STARTERS)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.PRIOR_MONTH_NEW_STARTERS)} prior-month starters`} sign="pos" />
+        <KPICard label="Terminations" value={showNumber(summary.TERMINATIONS)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.SAME_MONTH_TERMINATIONS)} same-month terminations`} sign="neg" />
+        <KPICard label="Status changes" value={showNumber(summary.STATUS_CHANGE_COUNT)} sub="Employee status changed" />
+        <KPICard label="Date changes" value={showNumber(summary.DATE_CHANGE_COUNT)} sub="Start or end date changed" />
       </div>
-    </div>
-  );
-};
 
-// ── Payroll Flags Tab ─────────────────────────────────────────────────────────
-const PayrollFlags = ({ flags, meta }) => {
-  const currLabel = meta.currMonth ? new Date(meta.currMonth).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—';
-  const territory = flags.filter(f=>f.ALERT_TYPE==='TERRITORY_FAILURE');
-  const unexpected= flags.filter(f=>f.ALERT_TYPE==='INDIVIDUAL' && f.IS_EXPECTED===false);
-  const expected  = flags.filter(f=>f.ALERT_TYPE==='INDIVIDUAL' && f.IS_EXPECTED===true);
+      <div className="peak-strip">
+        <div className="peak-item"><span className="peak-label">Salary payment changes</span><span className="peak-val">{showNumber(summary.SALARY_PAYMENT_CHANGE_COUNT)}</span></div>
+        <div className="peak-item"><span className="peak-label">Current-month starter terminations</span><span className="peak-val">{showNumber(summary.CURRENT_MONTH_NEW_STARTER_TERMINATIONS)}</span></div>
+        <div className="peak-item"><span className="peak-label">Current month</span><span className="peak-val">{isLoadingShell ? <Glimmer variant="text" w="90px" /> : monthFullLabel(summary.CURR_MONTH)}</span></div>
+        <div className="peak-item"><span className="peak-label">Data source</span><span className="peak-val">Payroll_Dashboard_Summary</span></div>
+      </div>
 
-  if (flags.length === 0) {
-    return (
-      <div className="tab-content">
-        <div style={{background:'#EAF3DE',border:'1px solid #8BC34A40',borderRadius:'var(--radius)',padding:'24px',display:'flex',alignItems:'center',gap:'14px'}}>
-          <span style={{fontSize:'20px'}}>✅</span>
+      <div className="charts-row">
+        <div className="chart-card" style={{flex:1}}>
+          <div className="chart-title">Current payroll by payment type</div>
+          {isLoadingShell ? <ChartGlimmer height={230} label="Loading payment type chart…" /> : <ChartCanvas config={paymentChart} height={230} />}
+        </div>
+        <div className="chart-card" style={{flex:1}}>
+          <div className="chart-title">Lifecycle distribution</div>
+          {isLoadingShell ? <ChartGlimmer height={230} label="Loading lifecycle chart…" /> : <ChartCanvas config={lifecycleChart} height={230} />}
+        </div>
+      </div>
+
+      <div className="charts-row">
+        <div className="chart-card" style={{flex:1}}>
+          <div className="chart-title">Payment type breakdown</div>
+          <PayrollJsonTable
+            rows={paymentRows}
+            columns={[
+              { key:'paymentType', label:'Payment type', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(PAY_BADGE,r.paymentType); return <Badge label={r.paymentType || 'Unknown'} bg={c.bg} color={c.color} />; } },
+              { key:'employeeCount', label:'Employees', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmt.number(r.employeeCount) },
+              { key:'currUsdTotal', label:'Current total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
+              { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : <span className={(Number(r.usdDelta)||0)<0?'neg':'pos'}>{fmtSignedUSD(r.usdDelta)}</span> },
+            ]}
+          />
+        </div>
+
+        <div className="chart-card" style={{flex:1}}>
+          <div className="chart-title">Lifecycle breakdown</div>
+          <PayrollJsonTable
+            rows={lifecycleRows}
+            columns={[
+              { key:'lifecycleStatus', label:'Lifecycle', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(LIFE_BADGE,r.lifecycleStatus); return <Badge label={String(r.lifecycleStatus || 'Unknown').replace(/_/g,' ')} bg={c.bg} color={c.color} />; } },
+              { key:'employeeCount', label:'Employees', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmt.number(r.employeeCount) },
+              { key:'currUsdTotal', label:'Current total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
+              { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : <span className={(Number(r.usdDelta)||0)<0?'neg':'pos'}>{fmtSignedUSD(r.usdDelta)}</span> },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div className="chart-card">
+        <div className="section-header" style={{marginBottom:'12px'}}>
           <div>
-            <div style={{fontWeight:600,color:'#27500A',marginBottom:'2px'}}>All clear for {currLabel}</div>
-            <div style={{fontSize:'0.8125rem',color:'var(--text-secondary)'}}>No stale records or territory failures detected for this cycle.</div>
+            <h3 className="section-title">Largest territory movements</h3>
+            <p className="section-sub">Sorted by absolute USD movement</p>
           </div>
+          <select className="f-select" value={territoryLimit} onChange={e=>setTerritoryLimit(Number(e.target.value))}>
+            <option value={10}>Top 10</option>
+            <option value={20}>Top 20</option>
+            <option value={50}>Top 50</option>
+            <option value={territoryRows.length}>All</option>
+          </select>
         </div>
+        <PayrollJsonTable
+          rows={territoryRows.slice(0, territoryLimit)}
+          columns={[
+            { key:'territory', label:'Territory' },
+            { key:'employeeCount', label:'Employees', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmt.number(r.employeeCount) },
+            { key:'prevUsdTotal', label:'Previous total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.prevUsdTotal) },
+            { key:'currUsdTotal', label:'Current total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
+            { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="row" /> : <PayrollMiniBar value={r.usdDelta} max={maxTerritoryDelta} /> },
+          ]}
+        />
       </div>
-    );
-  }
 
-  const FlagCard = ({ f, borderColor, typeLabel, typeBg, typeColor, badgeLabel, badgeBg, badgeColor }) => (
-    <div style={{
-      background:'var(--bg-paper)', border:`1px solid var(--surface-high)`,
-      borderLeft:`3px solid ${borderColor}`,
-      borderRadius:'0 var(--radius) var(--radius) 0',
-      padding:'14px 18px', marginBottom:'10px',
-      boxShadow:'var(--shadow-elevation)', display:'flex',
-      justifyContent:'space-between', alignItems:'flex-start', gap:'12px',
-    }}>
-      <div>
-        <div style={{fontSize:'0.625rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:typeColor,marginBottom:'4px'}}>{typeLabel}</div>
-        <div style={{fontWeight:600,color:'var(--text-primary)',marginBottom:'4px'}}>
-          {f.ALERT_TYPE==='TERRITORY_FAILURE' ? `${f.TERRITORY||f.CO_ID||'—'} — calculator not refreshing` : `${f.EE_NAME||'—'} — simulation stale`}
+      <div className="chart-card">
+        <div className="section-header" style={{marginBottom:'12px'}}>
+          <div>
+            <h3 className="section-title">Top employee movements</h3>
+            <p className="section-sub">Top employee-level movements already pre-computed by n8n</p>
+          </div>
+          <select className="f-select" value={moverLimit} onChange={e=>setMoverLimit(Number(e.target.value))}>
+            <option value={10}>Top 10</option>
+            <option value={20}>Top 20</option>
+          </select>
         </div>
-        <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',lineHeight:1.6}}>
-          {f.ALERT_TYPE==='TERRITORY_FAILURE'
-            ? `${f.EMPLOYEE_COUNT||'?'} of ${f.EMPLOYEE_COUNT||'?'} employees stale · Last refresh ${f.LAST_REFRESH||'unknown'} · ${f.DAYS_STALE ? `${f.DAYS_STALE}d ago` : ''}`
-            : `Status: ${f.EMP_STATUS||'unknown'} · Last refresh ${f.LAST_REFRESH||'unknown'} ${f.DAYS_STALE ? `· ${f.DAYS_STALE}d ago` : ''}`
-          }
-        </div>
+        <PayrollJsonTable
+          rows={topMovers.slice(0, moverLimit)}
+          columns={[
+            { key:'employeeName', label:'Employee', render:r=><span style={{fontWeight:600}}>{isLoadingShell ? <Glimmer variant="text" w="120px" /> : (r.employeeName || r.eeId || 'Unknown')}</span> },
+            { key:'territory', label:'Territory' },
+            { key:'paymentType', label:'Payment', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(PAY_BADGE,r.paymentType); return <Badge label={r.paymentType || 'Unknown'} bg={c.bg} color={c.color} />; } },
+            { key:'lifecycleStatus', label:'Lifecycle', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(LIFE_BADGE,r.lifecycleStatus); return <Badge label={String(r.lifecycleStatus || 'Unknown').replace(/_/g,' ')} bg={c.bg} color={c.color} />; } },
+            { key:'prevUsdTotal', label:'Previous', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.prevUsdTotal) },
+            { key:'currUsdTotal', label:'Current', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
+            { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="row" /> : <PayrollMiniBar value={r.usdDelta} max={maxMoverDelta} /> },
+          ]}
+        />
       </div>
-      <Badge label={badgeLabel} bg={badgeBg} color={badgeColor} />
-    </div>
-  );
-
-  return (
-    <div className="tab-content">
-      {territory.length > 0 && (
-        <>
-          <div style={{fontSize:'0.6875rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--text-secondary)',marginBottom:'10px'}}>
-            Territory failures ({territory.length})
-          </div>
-          {territory.map((f,i)=>(
-            <FlagCard key={i} f={f} borderColor="#F44336" typeLabel="Territory failure" typeColor="#A32D2D"
-              badgeLabel="TERRITORY_FAILURE" badgeBg="#FCEBEB" badgeColor="#791F1F" />
-          ))}
-        </>
-      )}
-      {unexpected.length > 0 && (
-        <>
-          <div style={{fontSize:'0.6875rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--text-secondary)',margin:'14px 0 10px'}}>
-            Unexpected stale records ({unexpected.length})
-          </div>
-          {unexpected.map((f,i)=>(
-            <FlagCard key={i} f={f} borderColor="#FFA726" typeLabel="Individual · Unexpected" typeColor="#854F0B"
-              badgeLabel="UNEXPECTED" badgeBg="#FAEEDA" badgeColor="#633806" />
-          ))}
-        </>
-      )}
-      {expected.length > 0 && (
-        <>
-          <div style={{fontSize:'0.6875rem',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--text-secondary)',margin:'14px 0 10px'}}>
-            Expected stale records ({expected.length})
-          </div>
-          {expected.map((f,i)=>(
-            <FlagCard key={i} f={f} borderColor="#CAC4CF" typeLabel="Individual · Expected" typeColor="#49454F"
-              badgeLabel="EXPECTED" badgeBg="#F1EFE8" badgeColor="#49454F" />
-          ))}
-        </>
-      )}
     </div>
   );
 };
 
-// ── Skeleton loader ──────────────────────────────────────────────────────────
-const SkeletonBlock = ({ h='16px', w='100%', mb='8px', radius='6px' }) => (
-  <div style={{height:h, width:w, borderRadius:radius, marginBottom:mb,
-    background:'linear-gradient(90deg,var(--surface-high) 25%,var(--surface-highest) 50%,var(--surface-high) 75%)',
-    backgroundSize:'200% 100%', animation:'shimmer 1.4s infinite'}} />
-);
-const SkeletonCard = () => (
-  <div className="kpi-card">
-    <SkeletonBlock h="10px" w="60%" mb="10px" />
-    <SkeletonBlock h="28px" w="80%" mb="6px" />
-    <SkeletonBlock h="10px" w="50%" mb="0" />
-  </div>
-);
-const DashboardSkeleton = () => (
-  <div className="tab-content" style={{paddingTop:'4px'}}>
-    <div className="kpi-grid" style={{marginBottom:'20px'}}>
-      {[1,2,3,4,5,6].map(i=><SkeletonCard key={i}/>)}
-    </div>
-    <div className="charts-row">
-      <div className="chart-card" style={{flex:2}}>
-        <SkeletonBlock h="14px" w="40%" mb="16px" />
-        <SkeletonBlock h="240px" mb="0" radius="8px" />
+// ── Customer Health Dashboard ─────────────────────────────────────────────────
+
+const RAG_CONF = {
+  Red:     { color:'#F44336', bg:'#F4433618', text:'#C62828' },
+  Amber:   { color:'#FFA726', bg:'#FFA72618', text:'#E65100' },
+  Green:   { color:'#66BB6A', bg:'#66BB6A18', text:'#2E7D32' },
+  Missing: { color:'#9C96A2', bg:'#9C96A218', text:'#49454F' },
+  Unknown: { color:'#9C96A2', bg:'#9C96A218', text:'#49454F' },
+};
+
+const RagBadge = ({ rag }) => {
+  const c = RAG_CONF[rag] || RAG_CONF.Unknown;
+  return (
+    <span className="priority-badge" style={{background:c.bg, color:c.text, fontSize:'0.625rem'}}>
+      {rag || 'Unknown'}
+    </span>
+  );
+};
+
+const MetricDot = ({ rag, title }) => {
+  const c = RAG_CONF[rag] || RAG_CONF.Unknown;
+  return (
+    <span title={title} style={{display:'inline-block', width:8, height:8, borderRadius:'50%', background:c.color, marginRight:3, flexShrink:0}} />
+  );
+};
+
+const H_PRIORITY = {
+  high:   { color:'#F44336', bg:'#F4433618', label:'High' },
+  medium: { color:'#FFA726', bg:'#FFA72618', label:'Medium' },
+  low:    { color:'#66BB6A', bg:'#66BB6A18', label:'Low' },
+};
+
+const CustomerHealthDashboard = ({ summary, meta, loading }) => {
+  const s   = summary || {};
+  const isL = loading || !summary;
+
+  const total  = Number(s.TOTAL_COMPANIES)      || 0;
+  const avg    = Number(s.AVG_SCORE)            || 0;
+  const red    = Number(s.RED_COUNT)            || 0;
+  const amber  = Number(s.AMBER_COUNT)          || 0;
+  const green  = Number(s.GREEN_COUNT)          || 0;
+  const hiPri  = Number(s.HIGH_PRIORITY_COUNT)  || 0;
+  const npsRte = Number(s.NPS_DATA_RATE_PCT)    || 0;
+  const msr    = Number(s.METRIC_SUCCESS_RATE)  || 0;
+  const noNps  = Number(s.MISSING_NPS_COUNT)    || 0;
+
+  const top10 = Array.isArray(s.TOP_10_AT_RISK_JSON) ? s.TOP_10_AT_RISK_JSON : [];
+  const bd    = s.METRIC_BREAKDOWN_JSON || {
+    growth:{green:0,amber:0,red:0,missing:0}, csm:{green:0,amber:0,red:0,missing:0},
+    nps:{green:0,amber:0,red:0,missing:0},    support:{green:0,amber:0,red:0,missing:0}
+  };
+  const dist  = s.SCORE_DISTRIBUTION_JSON || { '0-25':0, '26-50':0, '51-75':0, '76-100':0 };
+
+  const gaugeColor = avg < 50 ? '#F44336' : avg < 70 ? '#FFA726' : '#66BB6A';
+  const gaugeLabel = avg < 50 ? 'At risk' : avg < 70 ? 'Needs attention' : 'Healthy';
+  const gaugeTextColor = avg < 50 ? '#C62828' : avg < 70 ? '#E65100' : '#2E7D32';
+
+  // ── Gauge (semi-circle doughnut) ──────────────────────────────────────────
+  const gaugeCfg = useMemo(() => ({
+    type:'doughnut',
+    data:{
+      datasets:[{
+        data:[avg, 100 - avg],
+        backgroundColor:[gaugeColor, '#E9E9EA'],
+        borderWidth:0,
+        hoverOffset:0
+      }]
+    },
+    options:{
+      rotation:-90, circumference:180, cutout:'78%',
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{enabled:false} }
+    }
+  }), [avg, gaugeColor]);
+
+  // ── RAG Donut ─────────────────────────────────────────────────────────────
+  const ragCfg = useMemo(() => ({
+    type:'doughnut',
+    data:{
+      labels:['Green','Amber','Red'],
+      datasets:[{ data:[green,amber,red], backgroundColor:['#66BB6A','#FFA726','#F44336'], borderWidth:0 }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'65%',
+      plugins:{
+        legend:{ position:'right', labels:{ color:'#49454F', font:{family:'Poppins',size:11}, padding:10, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx=>`${ctx.label}: ${ctx.parsed} account${ctx.parsed!==1?'s':''}` } }
+      }
+    }
+  }), [red, amber, green]);
+
+  // ── Metric Health Matrix (stacked horizontal bar) ─────────────────────────
+  const matrixCfg = useMemo(() => ({
+    type:'bar',
+    data:{
+      labels:['Support Tickets','Net Promoter Score','CSM Sentiment','Employee Growth'],
+      datasets:[
+        { label:'Green',   data:[bd.support.green,  bd.nps.green,  bd.csm.green,  bd.growth.green],   backgroundColor:'#66BB6A', stack:'s' },
+        { label:'Amber',   data:[bd.support.amber,  bd.nps.amber,  bd.csm.amber,  bd.growth.amber],   backgroundColor:'#FFA726', stack:'s' },
+        { label:'Red',     data:[bd.support.red,    bd.nps.red,    bd.csm.red,    bd.growth.red],     backgroundColor:'#F44336', stack:'s' },
+        { label:'No data', data:[bd.support.missing,bd.nps.missing,bd.csm.missing,bd.growth.missing], backgroundColor:'#E9E9EA', stack:'s' },
+      ]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ labels:{ color:'#49454F', font:{family:'Poppins',size:11}, boxWidth:12, padding:12 } },
+        tooltip:{ callbacks:{ label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.x} company${ctx.parsed.x!==1?'s':''}` } }
+      },
+      scales:{
+        x:{ stacked:true, ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, stepSize:1 }, grid:{color:'#E9E9EA'}, title:{ display:true, text:'Number of companies', color:'#49454F', font:{family:'Poppins',size:10} } },
+        y:{ stacked:true, ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{display:false} }
+      }
+    }
+  }), [bd]);
+
+  // ── Score Distribution (histogram) ────────────────────────────────────────
+  const distCfg = useMemo(() => ({
+    type:'bar',
+    data:{
+      labels:['0 – 25','26 – 50','51 – 75','76 – 100'],
+      datasets:[{
+        label:'Companies',
+        data:[dist['0-25'], dist['26-50'], dist['51-75'], dist['76-100']],
+        backgroundColor:['#F44336','#FFA726','#5110DD','#66BB6A'],
+        borderRadius:6, borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>`${ctx.parsed.y} company${ctx.parsed.y!==1?'s':''}` } } },
+      scales:{
+        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{display:false}, title:{ display:true, text:'Health score band', color:'#49454F', font:{family:'Poppins',size:10} } },
+        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, stepSize:1 }, grid:{color:'#E9E9EA'}, title:{ display:true, text:'Companies', color:'#49454F', font:{family:'Poppins',size:10} } }
+      }
+    }
+  }), [dist]);
+
+  return (
+    <div className="tab-content">
+
+      {/* ── KPI Cards ── */}
+      <div className="kpi-grid">
+        <KPICard label="Avg health score"       value={isL ? null : avg}               sub={isL ? null : `${total} accounts scored · ${s.SCORE_DATE || '—'}`} loading={isL} />
+        <KPICard label="Red accounts"           value={isL ? null : red}               sub={isL ? null : 'Require immediate action'} sign={!isL && red > 0 ? 'neg' : null} loading={isL} />
+        <KPICard label="Amber accounts"         value={isL ? null : amber}             sub={isL ? null : `${green} green · ${total} total`} loading={isL} />
+        <KPICard label="High-priority actions"  value={isL ? null : hiPri}             sub={isL ? null : 'Accounts with at least one urgent action'} sign={!isL && hiPri > 0 ? 'neg' : null} loading={isL} />
+        <KPICard label="NPS data coverage"      value={isL ? null : `${npsRte}%`}      sub={isL ? null : `${noNps} account${noNps!==1?'s':''} have no NPS responses yet`} loading={isL} />
+        <KPICard label="Metric success rate"    value={isL ? null : `${msr}%`}         sub="Share of metrics with usable data" loading={isL} />
       </div>
-      <div className="chart-card" style={{flex:1}}>
-        <SkeletonBlock h="14px" w="50%" mb="16px" />
-        <SkeletonBlock h="240px" mb="0" radius="8px" />
+
+      {/* ── Row 1: Health Gauge + RAG Donut ── */}
+      <div className="charts-row">
+        <div className="chart-card" style={{flex:1}}>
+          <div className="chart-title">Portfolio health gauge</div>
+          {isL ? <ChartGlimmer height={200} label="Loading gauge…" /> : (
+            <div style={{position:'relative', height:'200px', display:'flex', alignItems:'center', justifyContent:'center'}}>
+              <ChartCanvas config={gaugeCfg} height={200} />
+              <div style={{position:'absolute', bottom:'12px', textAlign:'center', pointerEvents:'none', width:'100%'}}>
+                <div style={{fontSize:'2.25rem', fontWeight:700, color:gaugeColor, lineHeight:1}}>{avg}</div>
+                <div style={{fontSize:'0.6875rem', color:'var(--text-secondary)', marginTop:'2px'}}>out of 100</div>
+                <div style={{marginTop:'6px'}}>
+                  <span className="priority-badge" style={{background: gaugeColor+'20', color:gaugeTextColor, fontSize:'0.625rem'}}>{gaugeLabel}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="chart-card" style={{flex:1}}>
+          <div className="chart-title">RAG distribution</div>
+          {isL ? <ChartGlimmer height={200} label="Loading RAG split…" /> : (
+            <div style={{position:'relative', height:'200px'}}>
+              <ChartCanvas config={ragCfg} height={200} />
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* ── Row 2: Metric Health Matrix ── */}
+      <div className="chart-card">
+        <div className="chart-title">Metric health matrix — company count by RAG status per metric</div>
+        {isL ? <ChartGlimmer height={180} label="Loading metric matrix…" /> : <ChartCanvas config={matrixCfg} height={180} />}
+      </div>
+
+      {/* ── Row 3: Score Distribution ── */}
+      <div className="chart-card">
+        <div className="chart-title">Score distribution</div>
+        {isL ? <ChartGlimmer height={180} label="Loading score distribution…" /> : <ChartCanvas config={distCfg} height={180} />}
+      </div>
+
+      {/* ── Row 4: Top 10 At-Risk ── */}
+      <div className="chart-card">
+        <div className="section-header" style={{marginBottom:'12px'}}>
+          <div>
+            <h3 className="section-title">Top 10 at-risk accounts</h3>
+            <p className="section-sub">Sorted by health score ascending — lowest first</p>
+          </div>
+          {!isL && s.SCORE_DATE && (
+            <div style={{fontSize:'0.75rem', color:'var(--text-secondary)'}}>As of {s.SCORE_DATE}</div>
+          )}
+        </div>
+        <div className="table-wrap" style={{marginBottom:0}}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{width:28}}>#</th>
+                <th>Company</th>
+                <th className="r">Score</th>
+                <th>Status</th>
+                <th>Metrics <span style={{fontWeight:400,color:'var(--text-disabled)',fontSize:'0.5625rem'}}>G·C·N·S</span></th>
+                <th>Top recommended action</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isL
+                ? <LoadingTableRows columns={7} rows={5} />
+                : top10.length === 0
+                  ? <tr><td colSpan={7} className="no-data">No at-risk data yet — run the n8n pipeline first.</td></tr>
+                  : top10.map((co, i) => {
+                      const pConf = H_PRIORITY[co.top_action?.priority] || H_PRIORITY.medium;
+                      const scoreColor = co.score < 50 ? '#F44336' : co.score < 70 ? '#FFA726' : '#66BB6A';
+                      return (
+                        <tr key={co.company_id || i}>
+                          <td style={{color:'var(--text-disabled)', fontWeight:600, fontSize:'0.75rem'}}>{i + 1}</td>
+                          <td style={{fontWeight:600}}>{co.company_name}</td>
+                          <td className="r" style={{fontWeight:700, color:scoreColor, fontSize:'1.05rem'}}>{co.score}</td>
+                          <td><RagBadge rag={co.rag} /></td>
+                          <td>
+                            <span style={{display:'inline-flex', alignItems:'center'}}>
+                              <MetricDot rag={co.metrics?.growth}  title={`Employee Growth: ${co.metrics?.growth}`} />
+                              <MetricDot rag={co.metrics?.csm}     title={`CSM Sentiment: ${co.metrics?.csm}`} />
+                              <MetricDot rag={co.metrics?.nps}     title={`NPS: ${co.metrics?.nps}`} />
+                              <MetricDot rag={co.metrics?.support} title={`Support: ${co.metrics?.support}`} />
+                            </span>
+                          </td>
+                          <td style={{maxWidth:'260px', overflow:'hidden', textOverflow:'ellipsis', color:'var(--text-secondary)', fontSize:'0.75rem'}}>
+                            {co.top_action
+                              ? <span><span style={{color:'var(--text-primary)', fontWeight:500}}>{co.top_action.metric}:</span> {co.top_action.title}</span>
+                              : '—'}
+                          </td>
+                          <td>
+                            {co.top_action
+                              ? <span className="priority-badge" style={{background:pConf.bg, color:pConf.color, fontSize:'0.625rem'}}>{pConf.label}</span>
+                              : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
-    <div className="chart-card">
-      <SkeletonBlock h="14px" w="35%" mb="16px" />
-      {[1,2,3,4,5].map(i=><SkeletonBlock key={i} h="40px" mb="4px" radius="4px" />)}
-    </div>
-  </div>
-);
+  );
+};
 
 // ── APP ROOT ──────────────────────────────────────────────────────────────────
+
 const App = () => {
   // FME state — loads immediately on mount
   const [fme, setFme]       = useState({ loading:true, error:null, rawData:[], cleanedData:[], taxonomy:[], meta:{} });
   // ARR state — loads lazily on first selection
   const [arr, setArr]       = useState({ loading:false, loaded:false, error:null, arrMetrics:[], arrSummary:{}, arrFlagCount:{}, arrCompanies:[], meta:{} });
-  // Payroll state — loads lazily on first selection
+  // Payroll state — loads lazily on first selection.
+  // Demo version reads only Payroll_Dashboard_Summary.
   const [payroll, setPayroll] = useState({
     loading:false, loaded:false, error:null,
     months:[], selectedMonth:null,
-    deltas:[], flags:[], meta:{},
+    summary:null, meta:{},
   });
-  const [payrollTab, setPayrollTab] = useState('overview');
+  // Customer Health state — loads lazily on first selection
+  const [health, setHealth] = useState({ loading:false, loaded:false, error:null, summary:null, meta:{} });
 
   const [activeTab, setTab]     = useState('overview');
   const [activeDash, setDash]   = useState('home');
@@ -2492,67 +2482,167 @@ const App = () => {
       .finally(() => clearTimeout(timeout));
   }, [activeDash, arr.loaded, arr.loading]);
 
-  // ── Load Payroll months list on first selection ─────────────────────────────
+  // ── Load Payroll summary on first selection ────────────────────────────────
   useEffect(() => {
     if (activeDash !== 'payroll') return;
-    if (payroll.months.length > 0 || payroll.loading) return;
-    setPayroll(s=>({...s, loading:true, error:null}));
-    fetch(`${PAYROLL_SCRIPT_URL}?mode=months`, { cache:'no-store' })
-      .then(async r => { const t=await r.text(); if(!r.ok) throw new Error(`HTTP ${r.status}`); try{return JSON.parse(t);}catch(e){throw new Error('Invalid JSON: '+t.slice(0,200));} })
+    if (payroll.loaded || payroll.loading) return;
+
+    if (!PAYROLL_SCRIPT_URL || PAYROLL_SCRIPT_URL === 'YOUR_PAYROLL_SCRIPT_URL_HERE') {
+      setPayroll(s => ({ ...s, loading:false, loaded:false, error:'PAYROLL_SCRIPT_URL is not configured.' }));
+      return;
+    }
+
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 30000);
+
+    setPayroll(s => ({ ...s, loading:true, error:null }));
+
+    fetch(`${PAYROLL_SCRIPT_URL}?mode=months`, { signal: ctrl.signal, cache:'no-store' })
+      .then(async r => {
+        const text = await r.text();
+        if (!r.ok) throw new Error(`Months endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
+        try { return JSON.parse(text); }
+        catch (e) { throw new Error(`Months endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
+      })
+      .then(async monthsData => {
+        if (monthsData.error) throw new Error(monthsData.error);
+
+        const months = Array.isArray(monthsData.months) ? monthsData.months : [];
+        const latestMonth = monthsData.latestMonth || months[months.length - 1] || '';
+
+        if (!latestMonth) {
+          setPayroll(s => ({ ...s, loading:false, loaded:true, months, selectedMonth:'', summary:null, meta:monthsData.meta || {} }));
+          return;
+        }
+
+        const summaryRes = await fetch(
+          `${PAYROLL_SCRIPT_URL}?mode=summary&month=${encodeURIComponent(latestMonth)}`,
+          { signal: ctrl.signal, cache:'no-store' }
+        );
+        const summaryText = await summaryRes.text();
+        if (!summaryRes.ok) throw new Error(`Summary endpoint failed with HTTP ${summaryRes.status}: ${summaryText.slice(0, 300)}`);
+
+        let summaryData;
+        try { summaryData = JSON.parse(summaryText); }
+        catch (e) { throw new Error(`Summary endpoint did not return valid JSON. Response started with: ${summaryText.slice(0, 300)}`); }
+
+        if (summaryData.error) throw new Error(summaryData.error);
+
+        setPayroll({
+          loading:false,
+          loaded:true,
+          error:null,
+          months,
+          selectedMonth: latestMonth,
+          summary: summaryData.summary || summaryData.payrollSummary || null,
+          meta: summaryData.meta || {},
+        });
+      })
+      .catch(err => {
+        const msg = err.name === 'AbortError' ? 'Payroll summary request timed out after 30 seconds.' : err.message;
+        setPayroll(s => ({ ...s, loading:false, loaded:false, error:msg }));
+      })
+      .finally(() => clearTimeout(timeout));
+  }, [activeDash, payroll.loaded, payroll.loading]);
+
+  // ── Reload Payroll summary when the selected month changes ─────────────────
+  useEffect(() => {
+    if (activeDash !== 'payroll') return;
+    if (!payroll.selectedMonth) return;
+    if (!payroll.loaded) return;
+
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 30000);
+    const month = payroll.selectedMonth;
+
+    setPayroll(s => ({ ...s, loading:true, error:null, summary:null }));
+
+    fetch(`${PAYROLL_SCRIPT_URL}?mode=summary&month=${encodeURIComponent(month)}`, {
+      signal: ctrl.signal,
+      cache:'no-store'
+    })
+      .then(async r => {
+        const text = await r.text();
+        if (!r.ok) throw new Error(`Summary endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
+        try { return JSON.parse(text); }
+        catch (e) { throw new Error(`Summary endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
+      })
       .then(d => {
         if (d.error) throw new Error(d.error);
-        const latest = d.latestMonth || (d.months||[])[0] || null;
-        setPayroll(s=>({...s, loading:false, months:d.months||[], selectedMonth:latest}));
+        setPayroll(s => ({
+          ...s,
+          loading:false,
+          loaded:true,
+          summary: d.summary || d.payrollSummary || null,
+          meta: d.meta || {},
+        }));
       })
-      .catch(err => setPayroll(s=>({...s, loading:false, error:err.message})));
-  }, [activeDash]);
-
-  // ── Load Payroll deltas + flags when selectedMonth changes ──────────────────
-  useEffect(() => {
-    if (!payroll.selectedMonth) return;
-    const month = payroll.selectedMonth;
-    setPayroll(s=>({...s, loading:true, error:null, deltas:[], flags:[], meta:{}}));
-    const ctrl    = new AbortController();
-    const timeout = setTimeout(()=>ctrl.abort(), 30000);
-    Promise.all([
-      fetch(`${PAYROLL_SCRIPT_URL}?mode=deltas&month=${encodeURIComponent(month)}`,{signal:ctrl.signal,cache:'no-store'}).then(r=>r.json()),
-      fetch(`${PAYROLL_SCRIPT_URL}?mode=flags&month=${encodeURIComponent(month)}`, {signal:ctrl.signal,cache:'no-store'}).then(r=>r.json()),
-    ])
-    .then(([dData, fData]) => {
-      if (dData.error) throw new Error(dData.error);
-      setPayroll(s=>({...s, loading:false, loaded:true,
-        deltas: dData.deltas||[], flags: fData.flags||[], meta: dData.meta||{},
-      }));
-    })
-    .catch(err => {
-      const msg = err.name==='AbortError' ? 'Request timed out after 30s.' : err.message;
-      setPayroll(s=>({...s, loading:false, error:msg}));
-    })
-    .finally(()=>clearTimeout(timeout));
+      .catch(err => {
+        const msg = err.name === 'AbortError' ? 'Payroll summary request timed out after 30 seconds.' : err.message;
+        setPayroll(s => ({ ...s, loading:false, error:msg }));
+      })
+      .finally(() => clearTimeout(timeout));
   }, [payroll.selectedMonth]);
+
+  // ── Load Customer Health lazily when tab first selected ───────────────────
+  useEffect(() => {
+    if (activeDash !== 'health') return;
+    if (health.loaded || health.loading) return;
+
+    if (!HEALTH_SCRIPT_URL || HEALTH_SCRIPT_URL === 'YOUR_HEALTH_SCRIPT_URL_HERE') {
+      setHealth(s => ({ ...s, loading:false, loaded:false, error:'HEALTH_SCRIPT_URL is not configured. Deploy CustomerHealth_AppScript.gs and paste the /exec URL into index.html.' }));
+      return;
+    }
+
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 30000);
+
+    setHealth(s => ({ ...s, loading:true, error:null }));
+
+    fetch(`${HEALTH_SCRIPT_URL}?mode=healthSummary`, { signal:ctrl.signal, cache:'no-store' })
+      .then(async r => {
+        const text = await r.text();
+        if (!r.ok) throw new Error(`Health endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
+        try { return JSON.parse(text); }
+        catch (e) { throw new Error(`Health endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
+      })
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        setHealth({ loading:false, loaded:true, error:null, summary:d.summary || null, meta:d.meta || {} });
+      })
+      .catch(err => {
+        const msg = err.name === 'AbortError' ? 'Health data request timed out after 30 seconds.' : err.message;
+        setHealth(s => ({ ...s, loading:false, loaded:false, error:msg }));
+      })
+      .finally(() => clearTimeout(timeout));
+  }, [activeDash, health.loaded, health.loading]);
 
   const { rawData, cleanedData, taxonomy, meta } = fme;
   const isPartial = cleanedData.length < rawData.length;
   const showTabs  = activeDash === 'finance';
   const TABS      = [['overview','Overview'],['gaps','Product gaps'],['trend','Trend analysis']];
-  const PAYROLL_TABS = [['overview','Overview'],['details','Details'],['flags',`Flags${payroll.flags.length>0?` (${payroll.flags.length})`:''}`]];
-  const activeMeta = activeDash === 'arr' ? arr.meta : activeDash === 'payroll' ? payroll.meta : meta;
+  const PAYROLL_TABS = [['overview','Overview']];
+  const activeMeta = activeDash === 'arr' ? arr.meta : activeDash === 'payroll' ? payroll.meta : activeDash === 'health' ? health.meta : meta;
 
   const handleDashChange = id => { setDash(id); setTab('overview'); };
 
   // ── Header subtitle ─────────────────────────────────────────────────────────
   const headerSub =
-    activeDash === 'home'    ? '@product Internal Analytics · Beta' :
+    activeDash === 'home'    ? 'Playroll Internal Analytics · Beta' :
     activeDash === 'arr'
       ? arr.loading ? 'Loading ARR data…'
         : arr.loaded ? `ARR intelligence · ${Object.keys(arr.arrSummary).length} months`
         : 'Select to load'
     : activeDash === 'payroll'
       ? payroll.loading ? 'Loading payroll data…'
-        : payroll.loaded ? `Payroll validation · ${payroll.meta.totalRows||0} employees · ${payroll.months.length} months available`
+        : payroll.loaded ? `Payroll validation summary · ${payroll.summary?.TOTAL_EMPLOYEES ? fmt.number(payroll.summary.TOTAL_EMPLOYEES) : '—'} employees · ${payroll.months.length} months available`
         : 'Select to load'
-      : fme.loading ? 'Loading…'
-        : `Variance analysis intelligence · ${fmt.number(rawData.length)} total records${isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}`;
+    : activeDash === 'health'
+      ? health.loading ? 'Loading health data…'
+        : health.loaded ? `Customer health · ${health.summary?.TOTAL_COMPANIES || '—'} accounts · scored ${health.summary?.SCORE_DATE || '—'}`
+        : 'Select to load'
+    : fme.loading ? 'Loading…'
+      : `Variance analysis intelligence · ${fmt.number(rawData.length)} total records${isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}`;
 
   return (
     <div className="shell">
@@ -2567,21 +2657,21 @@ const App = () => {
       <div className="app">
         <header className="app-header">
           <div className="header-left">
-            <div className="logo">{activeDash==='home' ? 'Internal Analytics' : activeDash==='arr' ? 'ARR' : activeDash==='payroll' ? 'Payroll validation' : 'Finance adjustments'}</div>
+            <div className="logo">{activeDash==='home' ? 'Internal Analytics' : activeDash==='arr' ? 'ARR' : activeDash==='payroll' ? 'Payroll validation' : activeDash==='health' ? 'Customer health' : 'Finance adjustments'}</div>
             <div className="header-sub">{headerSub} · Updated {activeMeta?.generatedAt ? new Date(activeMeta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           </div>
           <nav className="tab-nav">
             {activeDash === 'payroll' && (
               <>
                 {payroll.months.length > 0 && (
-                  <select className="f-select" style={{marginRight:'8px'}} value={payroll.selectedMonth||''} onChange={e=>setPayroll(s=>({...s,selectedMonth:e.target.value,loaded:false,deltas:[],flags:[],meta:{}}))}>
+                  <select className="f-select" style={{marginRight:'8px'}} value={payroll.selectedMonth||''} onChange={e=>setPayroll(s=>({...s,selectedMonth:e.target.value,summary:null,meta:{}}))}>
                     {payroll.months.map(m=>(
                       <option key={m} value={m}>{new Date(m).toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</option>
                     ))}
                   </select>
                 )}
                 {PAYROLL_TABS.map(([id,label])=>(
-                  <button key={id} className={`tab-btn${payrollTab===id?' active':''}`} onClick={()=>setPayrollTab(id)}>{label}</button>
+                  <button key={id} className="tab-btn active" disabled>{label}</button>
                 ))}
               </>
             )}
@@ -2600,20 +2690,19 @@ const App = () => {
 
           {/* ── Finance Adjustments ── */}
           {activeDash==='finance' && (
-            fme.loading ? <DashboardSkeleton /> :
-            fme.error   ? <ErrorScreen msg={fme.error} /> :
+            fme.error ? <ErrorScreen msg={fme.error} /> :
             <>
-              {activeTab==='overview' && <Overview rows={rawData} taxonomy={taxonomy} />}
+              {activeTab==='overview' && <Overview rows={rawData} taxonomy={taxonomy} loading={fme.loading} />}
               {activeTab==='gaps' && (
                 <div>
-                  {isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
-                  <ProductGaps rows={cleanedData} taxonomy={taxonomy} />
+                  {!fme.loading && isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
+                  <ProductGaps rows={cleanedData} taxonomy={taxonomy} loading={fme.loading} />
                 </div>
               )}
               {activeTab==='trend' && (
                 <div>
-                  {isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
-                  <TrendAnalysis rows={cleanedData} taxonomy={taxonomy} />
+                  {!fme.loading && isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
+                  <TrendAnalysis rows={cleanedData} taxonomy={taxonomy} loading={fme.loading} />
                 </div>
               )}
             </>
@@ -2621,24 +2710,25 @@ const App = () => {
 
           {/* ── ARR ── */}
           {activeDash==='arr' && (
-            arr.loading ? <DashboardSkeleton /> :
-            arr.error   ? <ErrorScreen msg={arr.error} /> :
+            arr.error ? <ErrorScreen msg={arr.error} /> :
             <ARRDashboard
               arrMetrics={arr.arrMetrics}
               arrSummary={arr.arrSummary}
               arrFlagCount={arr.arrFlagCount}
+              loading={arr.loading}
             />
           )}
 
           {/* ── Payroll Validation ── */}
           {activeDash==='payroll' && (
-            payroll.loading ? <DashboardSkeleton /> :
-            payroll.error   ? <ErrorScreen msg={payroll.error} /> :
-            <>
-              {payrollTab==='overview' && <PayrollOverview deltas={payroll.deltas} flags={payroll.flags} meta={payroll.meta} />}
-              {payrollTab==='details'  && <PayrollDetails  deltas={payroll.deltas} meta={payroll.meta} />}
-              {payrollTab==='flags'    && <PayrollFlags    flags={payroll.flags}   meta={payroll.meta} />}
-            </>
+            payroll.error ? <ErrorScreen msg={payroll.error} /> :
+            <PayrollOverview summary={payroll.summary} meta={payroll.meta} loading={payroll.loading} />
+          )}
+
+          {/* ── Customer Health ── */}
+          {activeDash==='health' && (
+            health.error ? <ErrorScreen msg={health.error} /> :
+            <CustomerHealthDashboard summary={health.summary} meta={health.meta} loading={health.loading} />
           )}
 
         </main>
