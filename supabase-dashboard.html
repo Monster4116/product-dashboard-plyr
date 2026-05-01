@@ -103,12 +103,37 @@ const StatusBadge = ({ value }) => {
   return <span className="priority-badge" style={{ color, background: `${color}18` }}>{value || 'Unknown'}</span>;
 };
 
-async function fetchAll(table, orderBy) {
-  let query = db.from(table).select('*');
-  if (orderBy) query = query.order(orderBy, { ascending: false });
-  const { data, error } = await query;
-  if (error) throw new Error(`${table}: ${error.message}`);
-  return data || [];
+async function fetchAll(table, orderBy, pageSize = 1000) {
+  let allRows = [];
+  let from = 0;
+  let to = pageSize - 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = db
+      .from(table)
+      .select('*')
+      .range(from, to);
+
+    if (orderBy) {
+      query = query.order(orderBy, { ascending: false });
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`${table}: ${error.message}`);
+    }
+
+    const rows = data || [];
+    allRows = allRows.concat(rows);
+
+    hasMore = rows.length === pageSize;
+    from += pageSize;
+    to += pageSize;
+  }
+
+  return allRows;
 }
 
 const FinanceView = ({ rows }) => {
