@@ -4,78 +4,30 @@ window.DASHBOARD_PAGES = [
     label: 'Home',
     title: 'Dashboard Home',
     href: 'index.html',
-    navGroup: 'Overview',
+    navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-neutral',
     icon: 'HM',
     cardTitle: 'Dashboard home',
-    description: 'See the available dashboards, what data each page will contain, and which sections are already live.'
+    description: 'See the available dashboards, what data each page contains, and navigate into the live finance dashboard.'
   },
   {
     id: 'finance-adjustments',
     label: 'Finance Adjustments',
     title: 'Finance Adjustments',
     href: 'finance-adjustments.html',
-    navGroup: 'Dashboards',
+    navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-primary',
     icon: 'FA',
     cardTitle: 'Finance adjustments',
     description: 'Analyse payroll adjustment variances by primary aspect, territory, company and employee, with trend and exposure views.'
-  },
-  {
-    id: 'arr',
-    label: 'ARR',
-    title: 'ARR',
-    href: '#',
-    navGroup: 'Dashboards',
-    status: 'coming-soon',
-    accentClass: 'accent-success',
-    icon: 'AR',
-    cardTitle: 'ARR',
-    description: 'Track monthly ARR by sub-category, monitor churn and pipeline conversion, and review expansion across the portfolio.'
-  },
-  {
-    id: 'payroll-validation',
-    label: 'Payroll Validation',
-    title: 'Payroll Validation',
-    href: '#',
-    navGroup: 'Dashboards',
-    status: 'coming-soon',
-    accentClass: 'accent-info',
-    icon: 'PV',
-    cardTitle: 'Payroll validation',
-    description: 'Review month-on-month payroll movements, employee deltas and stale simulation alerts across territories.'
-  },
-  {
-    id: 'customer-health',
-    label: 'Customer Health',
-    title: 'Customer Health',
-    href: '#',
-    navGroup: 'Dashboards',
-    status: 'coming-soon',
-    accentClass: 'accent-danger',
-    icon: 'CH',
-    cardTitle: 'Customer health',
-    description: 'Monitor customer health scores, RAG changes, support activity and at-risk account signals.'
-  },
-  {
-    id: 'product-research',
-    label: 'Product Research',
-    title: 'Product Research',
-    href: '#',
-    navGroup: 'Dashboards',
-    status: 'coming-soon',
-    accentClass: 'accent-secondary',
-    icon: 'PR',
-    cardTitle: 'Product research',
-    description: 'A dedicated place for product and competitor research outputs, source libraries and research artefacts.'
   }
 ];
 
 window.getDashboardStats = function getDashboardStats() {
   const pages = window.DASHBOARD_PAGES || [];
-  const dashboardPages = pages.filter(page => page.navGroup === 'Dashboards');
+  const dashboardPages = pages.filter(page => page.id !== 'home');
   const liveCount = dashboardPages.filter(page => page.status === 'live').length;
   return {
     totalDashboards: dashboardPages.length,
@@ -92,21 +44,6 @@ window.renderSidebar = function renderSidebar(activePageId) {
       .filter(page => page.navGroup === group)
       .map(page => {
         const isActive = page.id === activePageId;
-        const isDisabled = page.status !== 'live';
-        const statusMarkup = isDisabled
-          ? '<span class="nav-status">Soon</span>'
-          : '';
-
-        if (isDisabled) {
-          return `
-            <div class="nav-item nav-item-disabled">
-              <span class="nav-icon">${page.icon}</span>
-              <span class="nav-label">${page.label}</span>
-              ${statusMarkup}
-            </div>
-          `;
-        }
-
         return `
           <a class="nav-item${isActive ? ' active' : ''}" href="${page.href}">
             <span class="nav-icon">${page.icon}</span>
