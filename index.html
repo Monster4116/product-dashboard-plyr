@@ -3,291 +3,280 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Variance Analysis Dashboard</title>
+<title>Product Dashboard 2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useRef, useMemo } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 
-// ── CONFIG — replace with your deployed Apps Script URL ──────────────────────
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s//exec';
-const ARR_SCRIPT_URL  = 'https://script.google.com/macros/s/-/exec';
-const PAYROLL_SCRIPT_URL = 'https://script.google.com/macros/s//exec';
-const HEALTH_SCRIPT_URL  = 'https://script.google.com/macros/s//exec'; // ← replace after deploying CustomerHealth_AppScript.gs
-  // ── Formatters ────────────────────────────────────────────────────────────────
+const DASHBOARD_CONFIG = window.__DASHBOARD_CONFIG__ || {
+  supabaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWpjZ3NlbmpodGttaGlzcWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MzMzMjAsImV4cCI6MjA5MzIwOTMyMH0.yGhYmqI_I-tXT_wvkmaDTy_hCW5uD_4-FKEsmTNohBA'
+};
+
+const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D'];
+
 const fmt = {
   currency: n => {
-    const v = parseFloat(n) || 0;
+    const v = Number(n) || 0;
     const abs = Math.abs(v);
     const sign = v < 0 ? '-' : '';
-    if (abs >= 1e6)  return `${sign}$${(abs/1e6).toFixed(2)}M`;
-    if (abs >= 1000) return `${sign}$${(abs/1000).toFixed(1)}K`;
+    if (abs >= 1000000) return `${sign}$${(abs / 1000000).toFixed(2)}M`;
+    if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}K`;
     return `${sign}$${abs.toFixed(0)}`;
   },
-  currencyFull: n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(parseFloat(n)||0),
-  number: n => new Intl.NumberFormat('en-US').format(Math.round(parseFloat(n)||0)),
-  pct: n => `${(parseFloat(n)||0).toFixed(1)}%`,
-  month: d => {
-    if (!d) return '';
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
-  },
-  monthFull: d => {
-    if (!d) return '';
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${months[d.getMonth()]} ${d.getFullYear()}`;
-  },
+  number: n => new Intl.NumberFormat('en-US').format(Math.round(Number(n) || 0)),
+  pct: n => `${(Number(n) || 0).toFixed(1)}%`,
 };
 
-const parseMonth = m => {
-  if (!m) return null;
-  if (m instanceof Date) return m;
-  if (typeof m === 'number') return new Date(Math.round((m-25569)*86400*1000));
-  const d = new Date(m);
-  return isNaN(d.getTime()) ? null : d;
+const parseMonth = value => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 };
 
-const monthKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '';
-
-// Playroll-aligned chart colors: primary purple + semantic palette
-const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D','#267EB5','#388E3C'];
-
-const PRIORITY_CONF = {
-  Critical: { color:'#F44336', bg:'#F4433618' },
-  High:     { color:'#FFA726', bg:'#FFA72618' },
-  Medium:   { color:'#5110DD', bg:'#5110DD18' },
-  Low:      { color:'#66BB6A', bg:'#66BB6A18' }
+const monthKey = value => {
+  const d = parseMonth(value);
+  if (!d) return 'Unknown';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
 };
 
-const getPriority = (abs, records) => {
-  if (abs >= 150000 || records >= 400) return 'Critical';
-  if (abs >= 50000  || records >= 150) return 'High';
-  if (abs >= 15000  || records >= 50)  return 'Medium';
-  return 'Low';
+const monthLabel = key => {
+  if (key === 'Unknown') return key;
+  const [year, month] = key.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month:'short', year:'2-digit' });
 };
 
-// Chart.js defaults for Playroll light theme
-const CHART_SCALE_DEFAULTS = {
-  tickColor: '#49454F',
-  gridColor: '#E9E9EA',
-  fontSize: 11,
-};
+const db = DASHBOARD_CONFIG.supabaseUrl && DASHBOARD_CONFIG.supabaseAnonKey
+  ? supabase.createClient(DASHBOARD_CONFIG.supabaseUrl, DASHBOARD_CONFIG.supabaseAnonKey)
+  : null;
 
-// ── Reusable Chart Canvas ────────────────────────────────────────────────────
-const ChartCanvas = ({ config, height = 240 }) => {
-  const ref  = useRef(null);
-  const inst = useRef(null);
+const ChartCanvas = ({ config, height = 260 }) => {
+  const ref = useRef(null);
+  const chart = useRef(null);
+
   useEffect(() => {
     if (!ref.current || !config) return;
-    if (inst.current) { inst.current.destroy(); inst.current = null; }
-    inst.current = new Chart(ref.current, config);
-    return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+    if (chart.current) chart.current.destroy();
+    chart.current = new Chart(ref.current, config);
+    return () => chart.current && chart.current.destroy();
   }, [config]);
-  return <canvas ref={ref} style={{height:`${height}px`,maxHeight:`${height}px`}} />;
+
+  return <canvas ref={ref} style={{ height, maxHeight: height }} />;
 };
 
-// ── Loading / Error ──────────────────────────────────────────────────────────
 const LoadingScreen = () => (
   <div className="center-screen">
     <div className="spinner" />
-    <p style={{color:'var(--text-secondary)',fontSize:'0.8125rem'}}>Loading dashboard data…</p>
+    <p style={{ color:'var(--text-secondary)', fontSize:'0.8125rem' }}>Loading dashboard data…</p>
   </div>
 );
 
-const SkeletonBlock = ({ h='16px', w='100%', mb='8px', radius='6px' }) => (
-  <span className="glimmer" style={{display:'block',height:h,width:w,marginBottom:mb,borderRadius:radius}} />
-);
-
-const Glimmer = ({ variant='text', w=null, h=null, style={} }) => (
-  <span className={`glimmer ${variant}`} style={{width:w || undefined,height:h || undefined,...style}} />
-);
-
-const LoadingLabel = ({ text='Loading data…' }) => (
-  <span className="loading-overlay-label"><span className="loading-dot" />{text}</span>
-);
-
-const ChartGlimmer = ({ height=240, label='Loading chart…' }) => (
-  <div style={{height,position:'relative'}}>
-    <Glimmer variant="chart" h={`${height}px`} />
-    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <LoadingLabel text={label} />
-    </div>
-  </div>
-);
-
-const LoadingTableRows = ({ columns=4, rows=5 }) => (
-  <>
-    {Array.from({length:rows}).map((_,ri)=>(
-      <tr key={`loading-${ri}`}>
-        {Array.from({length:columns}).map((_,ci)=>(
-          <td key={ci} className={ci>0?'r':''}><Glimmer variant="row" /></td>
-        ))}
-      </tr>
-    ))}
-  </>
-);
-
-const ErrorScreen = ({ msg }) => (
+const ErrorScreen = ({ message }) => (
   <div className="center-screen">
-    <div className="err-title">Failed to load data</div>
-    <div className="err-msg">{msg}</div>
-    <div className="err-msg" style={{marginTop:8,fontSize:'0.75rem'}}>
-      Make sure APPS_SCRIPT_URL is set correctly in index.html and the script is deployed as a Web App accessible to "Anyone".
+    <div className="err-title">Failed to load dashboard</div>
+    <div className="err-msg">{message}</div>
+    <div className="err-msg" style={{ marginTop: 8 }}>
+      This page expects read-only Supabase access through the public anon key and RLS-protected tables or views.
     </div>
   </div>
 );
 
-// ── KPI Card ─────────────────────────────────────────────────────────────────
-const KPICard = ({ label, value, sub, sign, loading=false }) => (
+const KPICard = ({ label, value, sub, sign }) => (
   <div className="kpi-card">
     <div className="kpi-label">{label}</div>
-    <div className={`kpi-value${!loading && sign==='pos'?' pos':!loading && sign==='neg'?' neg':''}`}>
-      {loading ? <Glimmer variant="kpi" /> : value}
-    </div>
-    {(sub || loading) && <div className="kpi-sub">{loading ? <Glimmer variant="sub" /> : sub}</div>}
+    <div className={`kpi-value${sign ? ` ${sign}` : ''}`}>{value}</div>
+    {sub && <div className="kpi-sub">{sub}</div>}
   </div>
 );
 
-// ── TAB 1: OVERVIEW ──────────────────────────────────────────────────────────
-const Overview = ({ rows, loading=false }) => {
+async function fetchAll(table, orderBy, pageSize = 1000) {
+  let allRows = [];
+  let from = 0;
+  let to = pageSize - 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = db
+      .from(table)
+      .select('*')
+      .range(from, to);
+
+    if (orderBy) {
+      query = query.order(orderBy, { ascending: false });
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`${table}: ${error.message}`);
+    }
+
+    const rows = data || [];
+    allRows = allRows.concat(rows);
+
+    hasMore = rows.length === pageSize;
+    from += pageSize;
+    to += pageSize;
+  }
+
+  return allRows;
+}
+
+const FinanceView = ({ rows }) => {
+  const [territory, setTerritory] = useState('');
+  const [aspect, setAspect] = useState('');
+
+  const territories = useMemo(() => [...new Set(rows.map(r => r.TERRITORY).filter(Boolean))].sort(), [rows]);
+  const aspects = useMemo(() => [...new Set(rows.map(r => r.PRIMARY_ASPECT).filter(Boolean))].sort(), [rows]);
+
+  const filtered = useMemo(() => rows.filter(r => {
+    if (territory && r.TERRITORY !== territory) return false;
+    if (aspect && r.PRIMARY_ASPECT !== aspect) return false;
+    return true;
+  }), [rows, territory, aspect]);
+
   const stats = useMemo(() => {
-    const months = {}, aspects = {};
-    let totalAbs = 0, totalNet = 0;
-    const companies = new Set(), employees = new Set();
+    const companies = new Set();
+    const employees = new Set();
+    const months = {};
+    const aspectMap = {};
+    let totalAbs = 0;
+    let net = 0;
 
-    rows.forEach(r => {
-      const adj = parseFloat(r.ADJUSTMENT_USD) || 0;
-      const abs = parseFloat(r.ABS_ADJUSTMENT_USD) || Math.abs(adj);
-      const d   = parseMonth(r.MONTH);
-      const mk  = monthKey(d);
+    filtered.forEach(r => {
+      const adj = Number(r.ADJUSTMENT_USD) || 0;
+      const abs = Number(r.ABS_ADJUSTMENT_USD) || Math.abs(adj);
+      totalAbs += abs;
+      net += adj;
+      if (r.CO_ID) companies.add(r.CO_ID);
+      if (r.EE_ID) employees.add(r.EE_ID);
 
-      totalAbs += abs; totalNet += adj;
-      if (r.CO_ID)  companies.add(r.CO_ID);
-      if (r.EE_ID)  employees.add(r.EE_ID);
+      const mk = monthKey(r.MONTH);
+      if (!months[mk]) months[mk] = { key: mk, records: 0, abs: 0, net: 0 };
+      months[mk].records += 1;
+      months[mk].abs += abs;
+      months[mk].net += adj;
 
-      if (mk) {
-        if (!months[mk]) months[mk] = { key:mk, date:d, records:0, net:0, abs:0 };
-        months[mk].records++; months[mk].net += adj; months[mk].abs += abs;
-      }
       const pa = r.PRIMARY_ASPECT || 'Unknown';
-      if (!aspects[pa]) aspects[pa] = { records:0, abs:0, net:0 };
-      aspects[pa].records++; aspects[pa].abs += abs; aspects[pa].net += adj;
+      if (!aspectMap[pa]) aspectMap[pa] = { records: 0, abs: 0, net: 0 };
+      aspectMap[pa].records += 1;
+      aspectMap[pa].abs += abs;
+      aspectMap[pa].net += adj;
     });
 
-    const sortedMonths = Object.values(months).sort((a,b) => a.key.localeCompare(b.key));
-    const peakVol = sortedMonths.reduce((m,c) => c.records>(m?.records||0)?c:m, null);
-    const peakExp = sortedMonths.reduce((m,c) => c.abs>(m?.abs||0)?c:m, null);
-    const last2   = sortedMonths.slice(-2);
-    const momRec  = last2.length===2 ? ((last2[1].records-last2[0].records)/Math.max(last2[0].records,1)*100) : 0;
-    const momExp  = last2.length===2 ? ((last2[1].abs-last2[0].abs)/Math.max(last2[0].abs,1)*100) : 0;
-    const latestMonth = sortedMonths[sortedMonths.length-1];
+    return {
+      totalAbs,
+      net,
+      companies: companies.size,
+      employees: employees.size,
+      months: Object.values(months).sort((a,b) => a.key.localeCompare(b.key)),
+      aspects: Object.entries(aspectMap).map(([name, value]) => ({ name, ...value })).sort((a,b) => b.abs - a.abs),
+    };
+  }, [filtered]);
 
-    return { sortedMonths, aspects, totalAbs, totalNet, companies:companies.size, employees:employees.size, peakVol, peakExp, momRec, momExp, latestMonth };
-  }, [rows]);
-
-  const monthlyChartCfg = useMemo(() => ({
-    type:'bar',
-    data:{
-      labels: stats.sortedMonths.map(m=>fmt.month(m.date)),
-      datasets:[
-        { label:'Records', data:stats.sortedMonths.map(m=>m.records), backgroundColor:'#5110DD30', borderColor:'#5110DD', borderWidth:1.5, yAxisID:'y', order:2 },
-        { label:'Abs Exposure ($)', data:stats.sortedMonths.map(m=>m.abs), type:'line', borderColor:'#F44336', backgroundColor:'#F4433610', borderWidth:2, pointRadius:3, fill:true, yAxisID:'y1', order:1, tension:0.3 }
+  const monthlyChart = useMemo(() => ({
+    type: 'bar',
+    data: {
+      labels: stats.months.map(m => monthLabel(m.key)),
+      datasets: [
+        { label: 'Records', data: stats.months.map(m => m.records), backgroundColor: '#5110DD30', borderColor: '#5110DD', borderWidth: 1.5, yAxisID: 'y' },
+        { label: 'Abs exposure', data: stats.months.map(m => m.abs), type: 'line', borderColor: '#F44336', backgroundColor: '#F4433610', borderWidth: 2, pointRadius: 3, fill: true, yAxisID: 'y1', tension: 0.3 }
       ]
     },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      interaction:{ mode:'index', intersect:false },
-      plugins:{
-        legend:{ labels:{ color:'#49454F', font:{ family:'Poppins', size:11 } } },
-        tooltip:{ callbacks:{ label: ctx => ctx.datasetIndex===0 ? `Records: ${ctx.parsed.y}` : `Exposure: ${fmt.currencyFull(ctx.parsed.y)}` } }
-      },
-      scales:{
-        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ color:'#E9E9EA' } },
-        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ color:'#E9E9EA' }, title:{ display:true, text:'Records', color:'#49454F', font:{family:'Poppins',size:10} } },
-        y1:{ position:'right', ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, callback:v=>fmt.currency(v) }, grid:{ display:false } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color:'#49454F', font:{ family:'Poppins', size:11 } } } },
+      scales: {
+        x: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 } }, grid: { color:'#E9E9EA' } },
+        y: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 } }, grid: { color:'#E9E9EA' } },
+        y1: { position:'right', ticks: { color:'#49454F', callback: v => fmt.currency(v) }, grid: { display:false } }
       }
     }
   }), [stats]);
 
-  const donutCfg = useMemo(() => {
-    const labels = Object.keys(stats.aspects).sort((a,b)=>stats.aspects[b].records-stats.aspects[a].records);
-    return {
-      type:'doughnut',
-      data:{
-        labels,
-        datasets:[{ data:labels.map(k=>stats.aspects[k].records), backgroundColor:CHART_COLORS.slice(0,labels.length), borderWidth:0 }]
-      },
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ position:'right', labels:{ color:'#49454F', font:{family:'Poppins',size:11}, padding:10, boxWidth:12 } } }
-      }
-    };
-  }, [stats]);
-
-  const { totalAbs, totalNet, companies, employees, peakVol, peakExp, momRec, momExp, latestMonth } = stats;
+  const aspectChart = useMemo(() => ({
+    type: 'doughnut',
+    data: {
+      labels: stats.aspects.slice(0, 8).map(a => a.name),
+      datasets: [{ data: stats.aspects.slice(0, 8).map(a => a.records), backgroundColor: CHART_COLORS, borderWidth: 0 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position:'right', labels: { color:'#49454F', font:{ family:'Poppins', size:11 }, boxWidth: 12 } } }
+    }
+  }), [stats]);
 
   return (
     <div className="tab-content">
-      <div className="kpi-grid">
-        <KPICard label="Total records"      value={fmt.number(rows.length)} sub="All adjustments" loading={loading} />
-        <KPICard label="Absolute exposure"  value={fmt.currency(totalAbs)} sub="Total financial magnitude" loading={loading} />
-        <KPICard label="Net exposure"       value={fmt.currency(totalNet)} sign={totalNet>=0?'pos':'neg'} loading={loading} />
-        <KPICard label="Avg per adjustment" value={fmt.currency(rows.length?totalAbs/rows.length:0)} loading={loading} />
-        <KPICard label="Unique companies"   value={fmt.number(companies)} loading={loading} />
-        <KPICard label="Unique employees"   value={fmt.number(employees)} loading={loading} />
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Finance adjustments</h2>
+          <p className="section-sub">Read-only dataset from Supabase</p>
+        </div>
+        <div style={{ display:'flex', gap: 10, flexWrap:'wrap' }}>
+          <select className="f-select" value={territory} onChange={e => setTerritory(e.target.value)}>
+            <option value="">All territories</option>
+            {territories.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="f-select" value={aspect} onChange={e => setAspect(e.target.value)}>
+            <option value="">All aspects</option>
+            {aspects.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
       </div>
 
-      <div className="peak-strip">
-        {peakVol  && <div className="peak-item"><span className="peak-label">Peak month (volume)</span><span className="peak-val">{fmt.monthFull(peakVol.date)} — {fmt.number(peakVol.records)} records</span></div>}
-        {peakExp  && <div className="peak-item"><span className="peak-label">Peak month (exposure)</span><span className="peak-val">{fmt.monthFull(peakExp.date)} — {fmt.currency(peakExp.abs)}</span></div>}
-        {latestMonth && <div className="peak-item"><span className="peak-label">Latest month records</span><span className="peak-val">{fmt.number(latestMonth.records)}</span></div>}
-        <div className="peak-item"><span className="peak-label">MoM volume</span><span className={`peak-val ${momRec>0?'neg':momRec<0?'pos':''}`}>{momRec>0?'+':''}{momRec.toFixed(1)}%</span></div>
-        <div className="peak-item"><span className="peak-label">MoM exposure</span><span className={`peak-val ${momExp>0?'neg':momExp<0?'pos':''}`}>{momExp>0?'+':''}{momExp.toFixed(1)}%</span></div>
+      <div className="kpi-grid">
+        <KPICard label="Records" value={fmt.number(filtered.length)} sub="Filtered adjustments" />
+        <KPICard label="Absolute exposure" value={fmt.currency(stats.totalAbs)} sub="Total magnitude" />
+        <KPICard label="Net exposure" value={fmt.currency(stats.net)} sign={stats.net >= 0 ? 'pos' : 'neg'} />
+        <KPICard label="Avg adjustment" value={fmt.currency(filtered.length ? stats.totalAbs / filtered.length : 0)} />
+        <KPICard label="Companies" value={fmt.number(stats.companies)} />
+        <KPICard label="Employees" value={fmt.number(stats.employees)} />
       </div>
 
       <div className="charts-row">
-        <div className="chart-card" style={{flex:2}}>
-          <div className="chart-title">Monthly volume &amp; absolute exposure trend</div>
-          {loading ? <ChartGlimmer height={240} label="Loading finance trend…" /> : <ChartCanvas config={monthlyChartCfg} height={240} />}
+        <div className="chart-card" style={{ flex: 2 }}>
+          <div className="chart-title">Monthly records and exposure</div>
+          <ChartCanvas config={monthlyChart} />
         </div>
-        <div className="chart-card" style={{flex:1}}>
+        <div className="chart-card" style={{ flex: 1 }}>
           <div className="chart-title">Records by primary aspect</div>
-          {loading ? <ChartGlimmer height={240} label="Loading aspect split…" /> : <ChartCanvas config={donutCfg} height={240} />}
+          <ChartCanvas config={aspectChart} />
         </div>
       </div>
 
       <div className="chart-card">
-        <div className="chart-title">Absolute exposure by primary aspect</div>
-        <div className="table-wrap" style={{marginBottom:0,border:'none',borderRadius:0}}>
+        <div className="chart-title">Exposure by primary aspect</div>
+        <div className="table-wrap" style={{ marginBottom: 0 }}>
           <table className="data-table">
-            <thead><tr>
-              <th>Primary aspect</th>
-              <th className="r">Records</th>
-              <th className="r">% of total</th>
-              <th className="r">Absolute exposure</th>
-              <th className="r">Net exposure</th>
-              <th className="r">Avg / record</th>
-            </tr></thead>
+            <thead><tr><th>Primary aspect</th><th className="r">Records</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th></tr></thead>
             <tbody>
-              {loading ? <LoadingTableRows columns={6} rows={6} /> : Object.entries(stats.aspects).sort((a,b)=>b[1].abs-a[1].abs).map(([pa,d])=>(
-                <tr key={pa}>
-                  <td>{pa}</td>
-                  <td className="r">{fmt.number(d.records)}</td>
-                  <td className="r">{fmt.pct(rows.length?d.records/rows.length*100:0)}</td>
-                  <td className="r">{fmt.currency(d.abs)}</td>
-                  <td className={`r ${d.net<0?'neg':'pos'}`}>{fmt.currency(d.net)}</td>
-                  <td className="r">{fmt.currency(d.records?d.abs/d.records:0)}</td>
-                </tr>
-              ))}
+              {stats.aspects.map(a => <tr key={a.name}><td>{a.name}</td><td className="r">{fmt.number(a.records)}</td><td className="r">{fmt.currency(a.abs)}</td><td className={`r ${a.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(a.net)}</td><td className="r">{fmt.currency(a.records ? a.abs / a.records : 0)}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-title">Latest adjustment records</div>
+        <div className="table-wrap" style={{ marginBottom: 0 }}>
+          <table className="data-table">
+            <thead><tr><th>Month</th><th>CO ID</th><th>EE ID</th><th>Territory</th><th>Aspect</th><th className="r">Adjustment USD</th><th className="r">Confidence</th></tr></thead>
+            <tbody>
+              {filtered.slice(0, 50).map(r => <tr key={r.MATCH_KEY || `${r.MONTH}-${r.CO_ID}-${r.EE_ID}-${r.PRIMARY_ASPECT}`}><td>{r.MONTH}</td><td>{r.CO_ID}</td><td>{r.EE_ID}</td><td>{r.TERRITORY}</td><td>{r.PRIMARY_ASPECT || 'Unknown'}</td><td className={`r ${(Number(r.ADJUSTMENT_USD) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(r.ADJUSTMENT_USD)}</td><td className="r">{r.CONFIDENCE == null ? '—' : fmt.pct(Number(r.CONFIDENCE) * 100)}</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -295,2120 +284,64 @@ const Overview = ({ rows, loading=false }) => {
     </div>
   );
 };
-
-// ── TAB 2: PRODUCT GAPS ──────────────────────────────────────────────────────
-const ProductGaps = ({ rows, taxonomy, loading=false }) => {
-  const [selectedAspect, setSelectedAspect] = useState('Calculator inaccuracy');
-  const [expandedIdx, setExpandedIdx]       = useState(null);
-
-  const aspects  = useMemo(() => [...new Set(rows.map(r=>r.PRIMARY_ASPECT).filter(Boolean))].sort(), [rows]);
-  const taxLookup = useMemo(() => {
-    const m = {};
-    taxonomy.forEach(t => { if (t['Sub-Category Code']) m[t['Sub-Category Code']] = t; });
-    return m;
-  }, [taxonomy]);
-
-  const { gapData, totalRecords, totalAbs } = useMemo(() => {
-    const filtered  = rows.filter(r=>r.PRIMARY_ASPECT===selectedAspect);
-    const totalRecords = filtered.length;
-    const totalAbs  = filtered.reduce((s,r)=>s+(Math.abs(parseFloat(r.ADJUSTMENT_USD))||0),0);
-    const parents   = {};
-
-    filtered.forEach(r => {
-      const tax    = taxLookup[r.SUB_CAT_CODE] || {};
-      const parent = tax['Parent Category'] || 'Unclassified';
-      const sub    = tax['Sub-Category Name'] || r.SUB_CAT_CODE || 'Unknown';
-      const adj    = parseFloat(r.ADJUSTMENT_USD) || 0;
-      const abs    = Math.abs(adj);
-
-      if (!parents[parent]) parents[parent] = { parent, records:0, net:0, abs:0, subs:{} };
-      parents[parent].records++; parents[parent].net+=adj; parents[parent].abs+=abs;
-
-      if (!parents[parent].subs[sub]) parents[parent].subs[sub]={name:sub, code:r.SUB_CAT_CODE, records:0, net:0, abs:0};
-      parents[parent].subs[sub].records++; parents[parent].subs[sub].net+=adj; parents[parent].subs[sub].abs+=abs;
-    });
-
-    const gapData = Object.values(parents)
-      .sort((a,b)=>b.abs-a.abs)
-      .map((p,i)=>({
-        ...p, idx:i,
-        pctRec: totalRecords ? p.records/totalRecords*100 : 0,
-        pctAbs: totalAbs    ? p.abs/totalAbs*100           : 0,
-        avg:    p.records   ? p.abs/p.records              : 0,
-        priority: getPriority(p.abs, p.records),
-        subs: Object.values(p.subs).sort((a,b)=>b.abs-a.abs)
-      }));
-
-    return { gapData, totalRecords, totalAbs };
-  }, [rows, selectedAspect, taxLookup]);
-
-  const barChart = useMemo(() => ({
-    type:'bar',
-    data:{
-      labels: gapData.map(g=>g.parent.length>30?g.parent.slice(0,28)+'…':g.parent),
-      datasets:[{ label:'Absolute exposure', data:gapData.map(g=>g.abs), backgroundColor:CHART_COLORS.slice(0,gapData.length), borderWidth:0, borderRadius:6 }]
-    },
-    options:{
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>`${fmt.currencyFull(ctx.parsed.x)} (${fmt.number(gapData[ctx.dataIndex]?.records)} records)` } } },
-      scales:{
-        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, callback:v=>fmt.currency(v) }, grid:{color:'#E9E9EA'} },
-        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{display:false} }
-      }
-    }
-  }), [gapData]);
-
-  return (
-    <div className="tab-content">
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Product gap analysis</h2>
-          <p className="section-sub">{gapData.length} parent gap categories — click any row to expand sub-category detail</p>
-        </div>
-        <select className="f-select" value={selectedAspect} onChange={e=>{setSelectedAspect(e.target.value);setExpandedIdx(null);}}>
-          {aspects.map(a=><option key={a} value={a}>{a}</option>)}
-        </select>
-      </div>
-
-      {(loading || gapData.length > 0) && (
-        <div className="chart-card">
-          <div className="chart-title">Absolute exposure by parent category — {loading ? <Glimmer variant="text" w="140px" /> : selectedAspect}</div>
-          {loading ? <ChartGlimmer height={240} label="Loading product gap chart…" /> : <ChartCanvas config={barChart} height={Math.max(180, gapData.length*36)} />}
-        </div>
-      )}
-
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead><tr>
-            <th style={{width:28}}></th>
-            <th>Parent category</th>
-            <th className="r">Records</th>
-            <th className="r">% records</th>
-            <th className="r">Abs exposure</th>
-            <th className="r">Net exposure</th>
-            <th className="r">Avg / record</th>
-            <th>Priority</th>
-          </tr></thead>
-          <tbody>
-            {loading ? <LoadingTableRows columns={8} rows={7} /> : gapData.map((gap,i) => {
-              const pc = PRIORITY_CONF[gap.priority];
-              const isOpen = expandedIdx === i;
-              return (
-                <React.Fragment key={gap.parent}>
-                  <tr className={`gap-row${isOpen?' open':''}`} onClick={()=>setExpandedIdx(isOpen?null:i)}>
-                    <td className="expand-cell">{isOpen?'▼':'▶'}</td>
-                    <td className="gap-name">{gap.parent}</td>
-                    <td className="r">{fmt.number(gap.records)}</td>
-                    <td className="r">{fmt.pct(gap.pctRec)}</td>
-                    <td className="r">{fmt.currency(gap.abs)}</td>
-                    <td className={`r ${gap.net<0?'neg':'pos'}`}>{fmt.currency(gap.net)}</td>
-                    <td className="r">{fmt.currency(gap.avg)}</td>
-                    <td><span className="priority-badge" style={{background:pc.bg,color:pc.color}}>{gap.priority}</span></td>
-                  </tr>
-                  {isOpen && (
-                    <tr key={`${gap.parent}-detail`}>
-                      <td className="detail-td" colSpan={8}>
-                        <div className="detail-panel">
-                          <div className="detail-sub-hdr">Sub-category breakdown</div>
-                          <table className="sub-table">
-                            <thead><tr>
-                              <th>Sub-category name</th><th>Code</th>
-                              <th className="r">Records</th><th className="r">% parent</th>
-                              <th className="r">Abs exposure</th><th className="r">Net exposure</th>
-                              <th className="r">Avg / record</th>
-                            </tr></thead>
-                            <tbody>
-                              {gap.subs.map(s=>(
-                                <tr key={s.code}>
-                                  <td>{s.name}</td>
-                                  <td><code className="code-pill">{s.code}</code></td>
-                                  <td className="r">{fmt.number(s.records)}</td>
-                                  <td className="r">{fmt.pct(gap.records?s.records/gap.records*100:0)}</td>
-                                  <td className="r">{fmt.currency(s.abs)}</td>
-                                  <td className={`r ${s.net<0?'neg':'pos'}`}>{fmt.currency(s.net)}</td>
-                                  <td className="r">{fmt.currency(s.records?s.abs/s.records:0)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-// ── TAB 3: TREND ANALYSIS ────────────────────────────────────────────────────
-const DRILL_PAGE_SIZE = 25;
-
-const TrendAnalysis = ({ rows, taxonomy, loading=false }) => {
-  const [filters, setFilters]         = useState({ primaryAspect:'', parentCat:'', subCat:'', territory:'', company:'' });
-  const [metric, setMetric]           = useState('abs');
-  const [expandedMonth, setExpanded]  = useState(null);
-  const [drillPage, setDrillPage]     = useState(0);
-
-  const taxLookup = useMemo(() => {
-    const m = {};
-    taxonomy.forEach(t => { if (t['Sub-Category Code']) m[t['Sub-Category Code']] = t; });
-    return m;
-  }, [taxonomy]);
-
-  const opts = useMemo(() => ({
-    primaryAspects: [...new Set(rows.map(r=>r.PRIMARY_ASPECT).filter(Boolean))].sort(),
-    parentCats:     [...new Set(taxonomy.map(t=>t['Parent Category']).filter(Boolean))].sort(),
-    subCats:        [...new Set(taxonomy.map(t=>t['Sub-Category Code']).filter(Boolean))].sort(),
-    territories:    [...new Set(rows.map(r=>r.TERRITORY).filter(Boolean))].sort(),
-    companies:      [...new Set(rows.map(r=>r.COMPANY||r.CO_ID).filter(Boolean))].sort(),
-  }), [rows, taxonomy]);
-
-  const setF = (k,v) => { setFilters(f=>({...f,[k]:v})); setExpanded(null); setDrillPage(0); };
-
-  const filtered = useMemo(() => rows.filter(r => {
-    const tax = taxLookup[r.SUB_CAT_CODE] || {};
-    if (filters.primaryAspect && r.PRIMARY_ASPECT !== filters.primaryAspect) return false;
-    if (filters.parentCat     && tax['Parent Category'] !== filters.parentCat) return false;
-    if (filters.subCat        && r.SUB_CAT_CODE !== filters.subCat) return false;
-    if (filters.territory     && r.TERRITORY !== filters.territory) return false;
-    if (filters.company       && (r.COMPANY||r.CO_ID) !== filters.company) return false;
-    return true;
-  }), [rows, filters, taxLookup]);
-
-  const monthlyData = useMemo(() => {
-    const months = {};
-    filtered.forEach(r => {
-      const d  = parseMonth(r.MONTH);
-      const mk = monthKey(d);
-      if (!mk) return;
-      if (!months[mk]) months[mk] = { key:mk, date:d, records:0, net:0, abs:0 };
-      const adj = parseFloat(r.ADJUSTMENT_USD) || 0;
-      months[mk].records++; months[mk].net+=adj; months[mk].abs+=Math.abs(adj);
-    });
-    return Object.values(months).sort((a,b)=>a.key.localeCompare(b.key));
-  }, [filtered]);
-
-  const metricVal = m => metric==='abs' ? m.abs : metric==='net' ? m.net : m.records;
-
-  const trendCfg = useMemo(() => {
-    const labels = monthlyData.map(m=>fmt.month(m.date));
-    const values = monthlyData.map(metricVal);
-    return {
-      type:'line',
-      data:{
-        labels,
-        datasets:[{
-          label: metric==='abs'?'Absolute exposure':metric==='net'?'Net exposure':'Record volume',
-          data:values, borderColor:'#5110DD', backgroundColor:'#5110DD18',
-          borderWidth:2.5, pointRadius:4, pointHoverRadius:6, fill:true, tension:0.35
-        }]
-      },
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{
-          legend:{display:false},
-          tooltip:{ callbacks:{ label: ctx=>metric==='records'?`Volume: ${fmt.number(ctx.parsed.y)}`:`${metric==='abs'?'Abs':'Net'} exposure: ${fmt.currencyFull(ctx.parsed.y)}` } }
-        },
-        scales:{
-          x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{color:'#E9E9EA'} },
-          y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11}, callback:v=>metric==='records'?fmt.number(v):fmt.currency(v) }, grid:{color:'#E9E9EA'} }
-        }
-      }
-    };
-  }, [monthlyData, metric]);
-
-  const momRows = useMemo(() => monthlyData.map((m,i) => {
-    const prev   = monthlyData[i-1];
-    const val    = metricVal(m);
-    const prevV  = prev ? metricVal(prev) : null;
-    const change = prevV !== null ? val - prevV : null;
-    const pct    = prevV !== null && prevV !== 0 ? change/Math.abs(prevV)*100 : null;
-    return { key: m.key, date: m.date, val, change, pct };
-  }).reverse(), [monthlyData, metric]);
-
-  // Drill-down rows for the expanded month, sorted by abs exposure desc
-  const drillRows = useMemo(() => {
-    if (!expandedMonth) return [];
-    return filtered
-      .filter(r => monthKey(parseMonth(r.MONTH)) === expandedMonth)
-      .sort((a,b) => (Math.abs(parseFloat(b.ADJUSTMENT_USD)||0)) - (Math.abs(parseFloat(a.ADJUSTMENT_USD)||0)));
-  }, [filtered, expandedMonth]);
-
-  const totalDrillPages = Math.ceil(drillRows.length / DRILL_PAGE_SIZE);
-  const drillPageRows   = drillRows.slice(drillPage * DRILL_PAGE_SIZE, (drillPage+1) * DRILL_PAGE_SIZE);
-
-  const toggleMonth = (mk) => {
-    if (expandedMonth === mk) { setExpanded(null); }
-    else { setExpanded(mk); setDrillPage(0); }
-  };
-
-  const activeCount = Object.values(filters).filter(Boolean).length;
-  const METRICS = [['abs','Abs exposure'],['net','Net exposure'],['records','Volume']];
-
-  return (
-    <div className="tab-content">
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Trend analysis</h2>
-          <p className="section-sub">{fmt.number(filtered.length)} records · {activeCount} filter{activeCount!==1?'s':''} active · click any month row to drill into records</p>
-        </div>
-        <div className="metric-toggle">
-          {METRICS.map(([k,l])=><button key={k} className={`metric-btn${metric===k?' active':''}`} onClick={()=>setMetric(k)}>{l}</button>)}
-        </div>
-      </div>
-
-      <div className="filter-panel">
-        {[
-          ['primaryAspect','Primary aspect',opts.primaryAspects,'All aspects'],
-          ['parentCat',    'Parent category',opts.parentCats,   'All categories'],
-          ['subCat',       'Sub-category',   opts.subCats,      'All sub-categories'],
-          ['territory',    'Territory',      opts.territories,  'All territories'],
-          ['company',      'Company',        opts.companies,    'All companies'],
-        ].map(([k,label,list,placeholder])=>(
-          <div className="filter-group" key={k}>
-            <label>{label}</label>
-            <select className="f-select" value={filters[k]} onChange={e=>setF(k,e.target.value)}>
-              <option value="">{placeholder}</option>
-              {list.map(a=><option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-        ))}
-        {activeCount>0 && (
-          <button className="clear-btn" onClick={()=>{ setFilters({primaryAspect:'',parentCat:'',subCat:'',territory:'',company:''}); setExpanded(null); }}>
-            Clear all
-          </button>
-        )}
-      </div>
-
-      <div className="chart-card">
-        <div className="chart-title">
-          Month-over-month trend
-          {activeCount>0 && (
-            <span style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-              {Object.entries(filters).filter(([,v])=>v).map(([k,v])=><span key={k} className="filter-tag">{v}</span>)}
-            </span>
-          )}
-        </div>
-        {monthlyData.length > 0
-          ? <ChartCanvas config={trendCfg} height={260} />
-          : <div className="no-data">No data matches the selected filters</div>
-        }
-      </div>
-
-      {momRows.length > 0 && (
-        <div className="chart-card">
-          <div className="chart-title">Month-over-month change — click a row to view records</div>
-          <div className="table-wrap" style={{border:'none',borderRadius:0,marginBottom:0}}>
-            <table className="data-table">
-              <thead><tr>
-                <th style={{width:28}}></th>
-                <th>Month</th>
-                <th className="r">{metric==='records'?'Volume':metric==='abs'?'Abs exposure':'Net exposure'}</th>
-                <th className="r">MoM change</th>
-                <th className="r">MoM %</th>
-              </tr></thead>
-              <tbody>
-                {loading ? <LoadingTableRows columns={5} rows={6} /> : momRows.map((m,i) => {
-                  const isOpen = expandedMonth === m.key;
-                  return (
-                    <React.Fragment key={m.key}>
-                      <tr
-                        className={`gap-row${isOpen?' open':''}`}
-                        onClick={() => toggleMonth(m.key)}
-                      >
-                        <td className="expand-cell">{isOpen?'▼':'▶'}</td>
-                        <td style={{fontWeight: isOpen ? 600 : 400}}>{fmt.monthFull(m.date)}</td>
-                        <td className="r">{metric==='records'?fmt.number(m.val):fmt.currency(m.val)}</td>
-                        <td className={`r${m.change===null?'':m.change>0?' neg':' pos'}`}>
-                          {m.change===null?'—':`${m.change>0?'+':''}${metric==='records'?fmt.number(m.change):fmt.currency(m.change)}`}
-                        </td>
-                        <td className={`r${m.pct===null?'':m.pct>0?' neg':' pos'}`}>
-                          {m.pct===null?'—':`${m.pct>0?'+':''}${m.pct.toFixed(1)}%`}
-                        </td>
-                      </tr>
-
-                      {isOpen && (
-                        <tr>
-                          <td className="detail-td" colSpan={5}>
-                            <div className="detail-panel" style={{padding:'16px 20px'}}>
-
-                              {/* Drill header */}
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px',flexWrap:'wrap',gap:'8px'}}>
-                                <div>
-                                  <span className="detail-sub-hdr" style={{marginBottom:0}}>
-                                    {fmt.monthFull(m.date)} — {fmt.number(drillRows.length)} record{drillRows.length!==1?'s':''}
-                                  </span>
-                                  {activeCount > 0 && (
-                                    <span style={{marginLeft:'10px',color:'var(--text-secondary)',fontSize:'0.75rem'}}>
-                                      {Object.entries(filters).filter(([,v])=>v).map(([,v])=>v).join(' · ')}
-                                    </span>
-                                  )}
-                                </div>
-                                {totalDrillPages > 1 && (
-                                  <div style={{display:'flex',alignItems:'center',gap:'8px',fontSize:'0.75rem',color:'var(--text-secondary)'}}>
-                                    <button
-                                      onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.max(0,p-1))}}
-                                      disabled={drillPage===0}
-                                      style={{
-                                        padding:'4px 10px',border:'1px solid var(--container-outline-variant)',
-                                        borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',
-                                        cursor:drillPage===0?'not-allowed':'pointer',
-                                        color:drillPage===0?'var(--text-disabled)':'var(--text-primary)',
-                                        fontFamily:'var(--font)',fontSize:'0.75rem'
-                                      }}
-                                    >← Prev</button>
-                                    <span>Page {drillPage+1} of {totalDrillPages}</span>
-                                    <button
-                                      onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.min(totalDrillPages-1,p+1))}}
-                                      disabled={drillPage===totalDrillPages-1}
-                                      style={{
-                                        padding:'4px 10px',border:'1px solid var(--container-outline-variant)',
-                                        borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',
-                                        cursor:drillPage===totalDrillPages-1?'not-allowed':'pointer',
-                                        color:drillPage===totalDrillPages-1?'var(--text-disabled)':'var(--text-primary)',
-                                        fontFamily:'var(--font)',fontSize:'0.75rem'
-                                      }}
-                                    >Next →</button>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Drill table */}
-                              <div style={{overflowX:'auto',borderRadius:'var(--radius-sm)',border:'1px solid var(--surface-high)'}}>
-                                <table className="sub-table" style={{fontSize:'0.75rem',minWidth:'900px'}}>
-                                  <thead style={{background:'var(--surface-high)'}}>
-                                    <tr>
-                                      <th>Employee</th>
-                                      <th>Company</th>
-                                      <th>Territory</th>
-                                      <th>Currency</th>
-                                      <th className="r">Adj (billing)</th>
-                                      <th className="r">Adj USD</th>
-                                      <th className="r">Abs USD</th>
-                                      <th>Primary aspect</th>
-                                      <th>Sub-category</th>
-                                      <th className="r">Confidence</th>
-                                      <th>Tags</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {drillPageRows.map((r,ri) => {
-                                      const tax  = taxLookup[r.SUB_CAT_CODE] || {};
-                                      const adj  = parseFloat(r.ADJUSTMENT_USD) || 0;
-                                      const conf = parseFloat(r.CONFIDENCE) || 0;
-                                      const confColor = conf >= 0.9 ? 'var(--color-success-main)' : conf >= 0.75 ? 'var(--color-warning-main)' : 'var(--color-error-main)';
-                                      return (
-                                        <tr key={ri}>
-                                          <td style={{fontWeight:500}}>{r.EE_NAME || '—'}</td>
-                                          <td>{r.COMPANY || r.CO_ID || '—'}</td>
-                                          <td>{r.TERRITORY || r.COUNTRY_CODE || '—'}</td>
-                                          <td>{r.BIL_CURRENCY || '—'}</td>
-                                          <td className="r">{r.ADJUSTMENT_BIL !== '' && r.ADJUSTMENT_BIL !== undefined ? parseFloat(r.ADJUSTMENT_BIL).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</td>
-                                          <td className={`r ${adj<0?'neg':'pos'}`}>{fmt.currencyFull(adj)}</td>
-                                          <td className="r">{fmt.currencyFull(Math.abs(adj))}</td>
-                                          <td>{r.PRIMARY_ASPECT || '—'}</td>
-                                          <td>
-                                            {r.SUB_CAT_CODE
-                                              ? <span title={tax['Sub-Category Name']||''}>
-                                                  <code className="code-pill">{r.SUB_CAT_CODE}</code>
-                                                  {tax['Sub-Category Name'] && <span style={{marginLeft:6,color:'var(--text-secondary)',fontSize:'0.6875rem'}}>{tax['Sub-Category Name']}</span>}
-                                                </span>
-                                              : '—'
-                                            }
-                                          </td>
-                                          <td className="r" style={{color:confColor,fontWeight:600}}>
-                                            {conf > 0 ? `${(conf*100).toFixed(0)}%` : '—'}
-                                          </td>
-                                          <td style={{color:'var(--text-secondary)',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis'}}>{r.TAGS||'—'}</td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-
-                              {/* Bottom pagination */}
-                              {totalDrillPages > 1 && (
-                                <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:'8px',marginTop:'12px',fontSize:'0.75rem',color:'var(--text-secondary)'}}>
-                                  <button onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.max(0,p-1))}} disabled={drillPage===0}
-                                    style={{padding:'4px 12px',border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',cursor:drillPage===0?'not-allowed':'pointer',fontFamily:'var(--font)',fontSize:'0.75rem',color:drillPage===0?'var(--text-disabled)':'var(--text-primary)'}}>
-                                    ← Previous
-                                  </button>
-                                  {Array.from({length:totalDrillPages},(_,pi)=>(
-                                    <button key={pi} onClick={e=>{e.stopPropagation();setDrillPage(pi)}}
-                                      style={{padding:'4px 10px',border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',fontFamily:'var(--font)',fontSize:'0.75rem',cursor:'pointer',
-                                        background: pi===drillPage ? 'var(--color-primary-main)' : 'var(--bg-paper)',
-                                        color: pi===drillPage ? '#fff' : 'var(--text-primary)'}}>
-                                      {pi+1}
-                                    </button>
-                                  ))}
-                                  <button onClick={e=>{e.stopPropagation();setDrillPage(p=>Math.min(totalDrillPages-1,p+1))}} disabled={drillPage===totalDrillPages-1}
-                                    style={{padding:'4px 12px',border:'1px solid var(--container-outline-variant)',borderRadius:'var(--radius-sm)',background:'var(--bg-paper)',cursor:drillPage===totalDrillPages-1?'not-allowed':'pointer',fontFamily:'var(--font)',fontSize:'0.75rem',color:drillPage===totalDrillPages-1?'var(--text-disabled)':'var(--text-primary)'}}>
-                                    Next →
-                                  </button>
-                                </div>
-                              )}
-
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-
-// ── ARR Dashboard ───────────────────────────────────────────────────────────────────────────────
-const ARR_CONTRIBUTING = new Set(['stayed_active','stayed_signed','signed_joiner','active_joiner','stayed_signed_conversion']);
-const ARR_SUB_LABELS = {
-  stayed_active:'Stayed active', stayed_signed:'Stayed signed', signed_joiner:'Signed joiner',
-  active_joiner:'Active joiner', stayed_signed_conversion:'Conversion',
-  active_leaver:'Active leaver', signed_leaver:'Signed leaver',
-  retro_overbilled:'Retro overbilled', same_month_cancellation:'Same month cancel',
-  stayed_active_to_signed:'Active to signed',
-};
-const ARR_SUB_COLORS = {
-  stayed_active:'#2D6B12', stayed_signed:'#185FA5', signed_joiner:'#185FA5',
-  active_joiner:'#0F6E56', stayed_signed_conversion:'#0F6E56',
-  active_leaver:'#C0392B', signed_leaver:'#BA7517', retro_overbilled:'#8B2252',
-  same_month_cancellation:'#9CA3AF', stayed_active_to_signed:'#6B7280',
-};
-const ARR_SUB_BG = {
-  stayed_active:'#EAF4DE', stayed_signed:'#E6F0FB', signed_joiner:'#E6F0FB',
-  active_joiner:'#E0F5EE', stayed_signed_conversion:'#E0F5EE',
-  active_leaver:'#FCEAEA', signed_leaver:'#FAF0DD', retro_overbilled:'#FBEBF0',
-  same_month_cancellation:'#F3F4F6', stayed_active_to_signed:'#F3F4F6',
-};
-
-const fmtARR = n => {
-  const v = parseFloat(n)||0, a = Math.abs(v), s = v<0?'-':'';
-  if (a>=1e6) return `${s}$${(a/1e6).toFixed(2)}M`;
-  if (a>=1e3) return `${s}$${(a/1e3).toFixed(0)}K`;
-  return `${s}$${Math.round(a).toLocaleString()}`;
-};
-const fmtARRFull = n => { const v=parseFloat(n)||0,s=v<0?'-':''; return `${s}$${Math.abs(Math.round(v)).toLocaleString()}`; };
-
-const ARRDashboard = ({ arrMetrics=[], arrSummary={}, arrFlagCount={}, loading=false }) => {
-  const [selMonth, setSelMonth] = useState(null);
-  const [expandedMo, setExpandedMo] = useState(null);
-  const [companyState, setCompanyState] = useState({ loading:false, error:null, loadedMonth:null, rows:[] });
-
-  const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const moLabel = m => { if(!m) return ''; try { const d=new Date(m); return `${MNAMES[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`; } catch(e){return m;} };
-  const moFull  = m => { if(!m) return ''; try { const d=new Date(m); return `${MNAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}`; } catch(e){return m;} };
-  const normSub = s => String(s || '').trim().toLowerCase().replace(/\s+/g, '_');
-  const getSub = (subs, key) => (Array.isArray(subs) ? subs : []).find(x => normSub(x.sub) === key) || {ac:0, acR:0, acA:0};
-
-  const normMonth = value => {
-    if (value === null || value === undefined || value === '') return '';
-    if (typeof value === 'number') {
-      const d = new Date(Math.round((value - 25569) * 86400 * 1000));
-      return d.toISOString().slice(0, 10);
-    }
-    const s = String(value).trim();
-    if (/^\d+(\.\d+)?$/.test(s)) {
-      const d = new Date(Math.round((Number(s) - 25569) * 86400 * 1000));
-      return d.toISOString().slice(0, 10);
-    }
-    return s.substring(0, 10);
-  };
-
-  // Build trend data from Metrics sheet (EE counts) + Monthly Summary (ARR)
-  const { months, trendData } = useMemo(() => {
-    const eeByMonth = {};
-
-    arrMetrics.forEach(r => {
-      const m = normMonth(r.INV_MONTH);
-      const cat = String(r.CAT || '').trim().toUpperCase();
-      if (!m || !cat) return;
-      if (!eeByMonth[m]) eeByMonth[m] = {};
-      eeByMonth[m][cat] = Number(r.EE || 0);
-    });
-
-    const arrByMonth = {};
-    Object.entries(arrSummary || {}).forEach(([m, subs]) => {
-      const mk = normMonth(m);
-      if (!mk) return;
-      arrByMonth[mk] = { active:0, signed:0, newHire:0 };
-
-      (Array.isArray(subs) ? subs : []).forEach(s => {
-        const sub = normSub(s.sub);
-        const ac = Number(s.ac || 0);
-
-        if (sub === 'stayed_active' || sub === 'active_joiner' || sub === 'stayed_signed_conversion') {
-          arrByMonth[mk].active += ac;
-          if (sub === 'active_joiner') arrByMonth[mk].newHire += ac;
-        }
-
-        if (sub === 'stayed_signed' || sub === 'signed_joiner') {
-          arrByMonth[mk].signed += ac;
-        }
-      });
-    });
-
-    const months = [...new Set([...Object.keys(eeByMonth), ...Object.keys(arrByMonth)])].sort();
-    const trendData = months.map(m => {
-      const ee = eeByMonth[m] || {};
-      const ar = arrByMonth[m] || {active:0, signed:0, newHire:0};
-      return {
-        month: m,
-        activeARR:  ar.active,
-        signedARR:  ar.signed,
-        newHireARR: ar.newHire,
-        activeEE:   ee['ACTIVE']   || 0,
-        signedEE:   ee['SIGNED']   || 0,
-        newHireEE:  ee['NEW HIRE'] || 0,
-      };
-    });
-
-    return { months, trendData };
-  }, [arrMetrics, arrSummary]);
-
-  const summaryForMonth = m => {
-    const direct = arrSummary[m];
-    if (Array.isArray(direct)) return direct;
-    const foundKey = Object.keys(arrSummary || {}).find(k => normMonth(k) === m);
-    return foundKey && Array.isArray(arrSummary[foundKey]) ? arrSummary[foundKey] : [];
-  };
-
-  const monthTotalARR = (m, mode='actual') => {
-    const subs = summaryForMonth(m);
-    return subs.filter(s => ARR_CONTRIBUTING.has(normSub(s.sub)))
-      .reduce((a,s) => a + Number(mode==='rolling' ? s.acR : mode==='annual' ? s.acA : s.ac || 0), 0);
-  };
-
-  const activeMo = selMonth || months[months.length - 1] || '';
-  const tIdx  = trendData.findIndex(t => t.month === activeMo);
-  const td    = trendData[tIdx]   || {};
-  const ptd   = trendData[tIdx-1] || {};
-  const subs  = summaryForMonth(activeMo);
-  const gS    = s => getSub(subs, s);
-
-  const totalARR  = monthTotalARR(activeMo);
-  const prevARR   = tIdx > 0 ? monthTotalARR(months[tIdx-1]) : 0;
-  const arrDelta  = totalARR - prevARR;
-  const activeEE  = Number(td.activeEE||0), prevEE = Number(ptd.activeEE||0);
-  const joinersHC = subs.filter(s => normSub(s.sub)==='signed_joiner'||normSub(s.sub)==='active_joiner').length;
-  const pipeARR   = Number(gS('stayed_signed').ac || 0) + Number(gS('signed_joiner').ac || 0);
-  const churnARR  = Math.abs(Number(gS('active_leaver').ac || 0)) + Math.abs(Number(gS('signed_leaver').ac || 0));
-  const newBizARR = Number(gS('signed_joiner').ac || 0) + Number(gS('active_joiner').ac || 0);
-  const expansion = Number(gS('stayed_active').ac || 0) - (tIdx>0?(Number(getSub(summaryForMonth(months[tIdx-1]), 'stayed_active').ac || 0)):0)
-                  + Number(gS('stayed_signed').ac || 0) - (tIdx>0?(Number(getSub(summaryForMonth(months[tIdx-1]), 'stayed_signed').ac || 0)):0);
-  const maxBar    = Math.max(Math.abs(expansion), churnARR, 1);
-  const flagged   = arrFlagCount[activeMo] || 0;
-  const arrPerEE  = activeEE > 0 ? totalARR / activeEE : 0;
-  const prevArrPerEE = prevEE > 0 ? prevARR / prevEE : 0;
-
-  // Fetch company summary rows only for the currently selected month.
-// Company-level ARR drilldown is disabled for now.
-// The current ARR Apps Script only supports ?mode=summary.
-useEffect(() => {
-  setCompanyState({
-    loading: false,
-    error: null,
-    loadedMonth: activeMo || null,
-    rows: []
-  });
-}, [activeMo]);
-
-  const companyRows = companyState.loadedMonth === activeMo ? companyState.rows : [];
-  const topCompanies = useMemo(() => {
-    return [...companyRows]
-      .sort((a,b) => Math.abs(Number(b.ARR_DELTA || 0)) - Math.abs(Number(a.ARR_DELTA || 0)))
-      .slice(0, 20);
-  }, [companyRows]);
-
-  const trendCfg = useMemo(() => ({
-    type:'line',
-    data:{
-      labels: trendData.map(t => moLabel(t.month)),
-      datasets:[
-        { label:'Active',   data:trendData.map(t=>t.activeARR),  borderColor:'#2D6B12', backgroundColor:'#2D6B1210', borderWidth:2.5, pointRadius:3, fill:true, tension:0.3 },
-        { label:'Signed',   data:trendData.map(t=>t.signedARR),  borderColor:'#185FA5', backgroundColor:'#185FA510', borderWidth:2.5, pointRadius:3, fill:true, tension:0.3 },
-        { label:'New hire', data:trendData.map(t=>t.newHireARR), borderColor:'#0F6E56', backgroundColor:'#0F6E5610', borderWidth:2.5, pointRadius:3, fill:true, tension:0.3 },
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#49454F', font:{family:'Poppins',size:11} } }, tooltip:{ callbacks:{ label: ctx=>`${ctx.dataset.label}: ${fmtARR(ctx.parsed.y)}` } } },
-      scales:{ x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{color:'#E9E9EA'} }, y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, callback:v=>fmtARR(v) }, grid:{color:'#E9E9EA'} } }
-    }
-  }), [trendData]);
-
-  if (!months.length && !loading) return <div className="no-data" style={{padding:'48px'}}>No ARR data available. Ensure "Monthly Summary" tab exists in the ARR sheet and the script is redeployed.</div>;
-
-  return (
-    <div className="tab-content">
-
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px',flexWrap:'wrap'}}>
-        <div className="filter-group" style={{minWidth:'160px'}}>
-          <label>Selected month</label>
-          <select className="f-select" value={activeMo} onChange={e=>{setSelMonth(e.target.value);setExpandedMo(null);}}>
-            {[...months].reverse().map(m=><option key={m} value={m}>{moFull(m)}</option>)}
-          </select>
-        </div>
-        <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',paddingTop:'16px'}}>
-          {months.length} months · {moFull(months[0])} to {moFull(months[months.length-1])}
-          {companyState.loading && <span> · Loading company summary…</span>}
-          {!companyState.loading && companyState.loadedMonth === activeMo && <span> · {fmt.number(companyRows.length)} company rows</span>}
-        </div>
-      </div>
-
-      <div className="kpi-grid">
-        {[
-          ['Total ARR',       fmtARR(totalARR),  `${arrDelta>=0?'+':''}${fmtARR(arrDelta)} MoM`,  arrDelta>=0?'pos':'neg'],
-          ['Active employees',fmt.number(activeEE),`${activeEE-prevEE>=0?'+':''}${activeEE-prevEE} MoM`,activeEE>=prevEE?'pos':'neg'],
-          ['New hires',       fmt.number(Number(td.newHireEE||0)), `${fmt.number(joinersHC)} joiners this month`,'pos'],
-          ['ARR lost (leavers)', fmtARR(churnARR), `${fmtARR(gS('active_leaver').ac)} active · ${fmtARR(gS('signed_leaver').ac)} signed`,'neg'],
-          ['Pipeline ARR',    fmtARR(pipeARR), 'signed, not yet started', null],
-          ['Net new biz',     fmtARR(newBizARR), 'joiners this month', newBizARR>=0?'pos':null],
-        ].map(([label,value,sub,sign])=>(<KPICard key={label} label={label} value={value} sub={sub} sign={sign} loading={loading} />))}
-      </div>
-
-      <div className="charts-row">
-        <div className="chart-card" style={{flex:2}}>
-          <div className="chart-title">ARR trend — Active / Signed / New hire</div>
-          {loading ? <ChartGlimmer height={240} label="Loading ARR trend…" /> : <ChartCanvas config={trendCfg} height={240} />}
-        </div>
-        <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">Health snapshot <span style={{fontSize:'0.75rem',fontWeight:400,color:'var(--text-secondary)'}}>{moFull(activeMo)}</span></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'14px'}}>
-            {[
-              ['Active EE',      fmt.number(activeEE),   `${activeEE-prevEE>=0?'+':''}${activeEE-prevEE} vs prior month`,  activeEE>=prevEE?'pos':'neg'],
-              ['Signed EE',      fmt.number(Number(td.signedEE||0)), 'not yet started', null],
-              ['ARR / employee', fmtARR(arrPerEE),       arrPerEE>=prevArrPerEE?'▲ vs prior month':'▼ vs prior month',     arrPerEE>=prevArrPerEE?'pos':'neg'],
-              ['Flagged rows',   fmt.number(flagged || companyRows.reduce((s,r)=>s+Number(r.FLAGGED_EE_COUNT||0),0)), 'selected month', flagged?'neg':null],
-            ].map(([label,val,sub,sign])=>(
-              <div key={label} style={{background:'var(--surface-low)',borderRadius:'var(--radius-sm)',padding:'10px 12px',border:'1px solid var(--surface-high)'}}>
-                <div style={{fontSize:'0.625rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'4px'}}>{label}</div>
-                <div style={{fontSize:'1.1rem',fontWeight:700,color:sign==='pos'?'var(--color-success-main)':sign==='neg'?'var(--color-error-main)':'var(--text-primary)'}}>{val}</div>
-                <div style={{fontSize:'0.6875rem',color:'var(--text-secondary)',marginTop:'2px'}}>{sub}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{fontSize:'0.625rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'8px'}}>ARR movement — {moFull(activeMo)}</div>
-          {[
-            ['New biz',newBizARR,'var(--color-success-main)'],
-            ['Churn',-churnARR,'var(--color-error-main)']
-          ].map(([lbl,val,col])=>(
-            <div key={lbl} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
-              <span style={{fontSize:'0.75rem',color:col,width:'70px',textAlign:'right',flexShrink:0}}>{lbl}</span>
-              <div style={{flex:1,height:'8px',background:'var(--surface-high)',borderRadius:'4px',overflow:'hidden'}}>
-                <div style={{height:'100%',width:`${Math.round(Math.abs(val)/maxBar*100)}%`,background:col}} />
-              </div>
-              <span style={{fontSize:'0.75rem',fontWeight:600,color:col,width:'70px'}}>{fmtARR(val)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="chart-card">
-        <div className="chart-title">Monthly ARR movement — click a month to expand sub-category detail</div>
-        <div className="table-wrap" style={{border:'none',borderRadius:0,marginBottom:0}}>
-          <table className="data-table">
-            <thead><tr>
-              <th style={{width:28}}></th>
-              <th>Month</th>
-              <th className="r">Contributing ARR</th>
-              <th className="r">MoM Delta</th>
-              <th className="r">Active EE</th>
-              <th className="r">Signed EE</th>
-              <th className="r">New Hire EE</th>
-            </tr></thead>
-            <tbody>
-              {loading ? <LoadingTableRows columns={7} rows={8} /> : [...trendData].reverse().map((t,ri) => {
-                const revIdx  = trendData.length - 1 - ri;
-                const mArr    = monthTotalARR(t.month);
-                const pArr    = revIdx > 0 ? monthTotalARR(months[revIdx-1]) : null;
-                const delta   = pArr !== null ? mArr - pArr : null;
-                const isOpen  = expandedMo === t.month;
-                const isSel   = activeMo === t.month;
-                const mSubs   = summaryForMonth(t.month);
-                return (
-                  <React.Fragment key={t.month}>
-                    <tr className={`gap-row${isOpen?' open':''}`} style={{background:isSel?'#5110DD08':''}}
-                      onClick={()=>{setExpandedMo(isOpen?null:t.month); setSelMonth(t.month);}}>
-                      <td className="expand-cell">{isOpen?'▼':'▶'}</td>
-                      <td style={{fontWeight:isSel?600:500, color:isSel?'var(--color-primary-main)':'var(--text-primary)'}}>{moFull(t.month)}</td>
-                      <td className="r" style={{fontWeight:600}}>{fmtARRFull(mArr)}</td>
-                      <td className={`r${delta===null?'':delta>=0?' pos':' neg'}`}>
-                        {delta===null ? '—' : `${delta>=0?'+':''}${fmtARR(delta)}`}
-                      </td>
-                      <td className="r">{fmt.number(t.activeEE||0)}</td>
-                      <td className="r">{fmt.number(t.signedEE||0)}</td>
-                      <td className="r">{fmt.number(t.newHireEE||0)}</td>
-                    </tr>
-                    {isOpen && (
-                      <tr key={t.month+'-det'}>
-                        <td className="detail-td" colSpan={7}>
-                          <div className="detail-panel">
-                            <div className="detail-sub-hdr">Sub-category breakdown — {moFull(t.month)}</div>
-                            <table className="sub-table">
-                              <thead><tr>
-                                <th>Sub-category</th>
-                                <th className="r">ARR actual</th>
-                                <th className="r">ARR rolling</th>
-                                <th className="r">ARR annual</th>
-                                <th className="r">% of total</th>
-                              </tr></thead>
-                              <tbody>
-                                {mSubs.map(s => {
-                                  const sub = normSub(s.sub);
-                                  const col = ARR_SUB_COLORS[sub]||'#9CA3AF';
-                                  const bg  = ARR_SUB_BG[sub]||'var(--surface-low)';
-                                  const lbl = ARR_SUB_LABELS[sub]||sub;
-                                  const pct = mArr ? Math.round(Math.abs(Number(s.ac||0))/Math.abs(mArr)*100) : 0;
-                                  const isContrib = ARR_CONTRIBUTING.has(sub);
-                                  return (
-                                    <tr key={sub} style={{opacity: isContrib ? 1 : 0.65}}>
-                                      <td>
-                                        <span style={{display:'inline-flex',alignItems:'center',gap:'6px'}}>
-                                          <span style={{width:'7px',height:'7px',borderRadius:'50%',background:col,display:'inline-block',flexShrink:0}} />
-                                          <span style={{fontSize:'0.6875rem',padding:'2px 8px',borderRadius:'var(--radius-chip)',background:bg,color:col,fontWeight:600}}>{lbl}</span>
-                                        </span>
-                                      </td>
-                                      <td className={`r ${Number(s.ac||0)<0?'neg':'pos'}`} style={{fontFamily:'monospace'}}>{fmtARRFull(s.ac)}</td>
-                                      <td className="r" style={{color:'var(--text-secondary)',fontFamily:'monospace'}}>{fmtARRFull(s.acR)}</td>
-                                      <td className="r" style={{color:'var(--text-secondary)',fontFamily:'monospace'}}>{fmtARRFull(s.acA)}</td>
-                                      <td className="r">{pct}%</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="chart-card">
-        <div className="section-header" style={{marginBottom:'12px'}}>
-          <div>
-            <h2 className="section-title">Company summary — {moFull(activeMo)}</h2>
-            <p className="section-sub">Loaded separately from Company_Summary using CURRENT_MONTH = {activeMo}. Only required columns are returned.</p>
-          </div>
-          {companyState.loading && <span className="filter-tag">Loading companies…</span>}
-          {companyState.error && <span className="filter-tag" style={{background:'#F4433612',color:'var(--color-error-main)'}}>Failed to load</span>}
-          {!companyState.loading && !companyState.error && companyState.loadedMonth === activeMo && <span className="filter-tag">{fmt.number(companyRows.length)} rows</span>}
-        </div>
-
-        {companyState.error ? (
-          <div className="no-data" style={{padding:'24px'}}>{companyState.error}</div>
-        ) : companyState.loading || companyState.loadedMonth !== activeMo ? (
-          <div>
-            {[1,2,3,4].map(i=><SkeletonBlock key={i} h="38px" mb="6px" radius="4px" />)}
-          </div>
-        ) : companyRows.length === 0 ? (
-          <div className="no-data" style={{padding:'24px'}}>No company summary rows found for {moFull(activeMo)}.</div>
-        ) : (
-          <div className="table-wrap" style={{marginBottom:0}}>
-            <table className="data-table">
-              <thead><tr>
-                <th>Company</th>
-                <th>Country</th>
-                <th>Status</th>
-                <th className="r">Total ARR</th>
-                <th className="r">ARR Delta</th>
-                <th className="r">Joiners</th>
-                <th className="r">Leavers</th>
-                <th className="r">Active HC</th>
-                <th className="r">Signed HC</th>
-                <th className="r">Flags</th>
-              </tr></thead>
-              <tbody>
-                {topCompanies.map((c,i)=>(
-                  <tr key={c.MATCH_KEY || c.CO_ID || i}>
-                    <td style={{fontWeight:600}}>{c.CO_NAME || c.CO_ID || '—'}</td>
-                    <td>{c.CO_COUNTRY || '—'}</td>
-                    <td>{c.CO_STATUS || '—'}</td>
-                    <td className="r">{fmtARRFull(c.TOTAL_ARR)}</td>
-                    <td className={`r ${Number(c.ARR_DELTA||0)<0?'neg':'pos'}`}>{fmtARRFull(c.ARR_DELTA)}</td>
-                    <td className="r pos">{fmtARRFull(c.ARR_JOINERS)}</td>
-                    <td className="r neg">{fmtARRFull(c.ARR_LEAVERS)}</td>
-                    <td className="r">{fmt.number(c.ACTIVE_HC || 0)}</td>
-                    <td className="r">{fmt.number(c.SIGNED_HC || 0)}</td>
-                    <td className="r">{fmt.number(c.FLAGGED_EE_COUNT || 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-};
-
-// ── SVG Icons ─────────────────────────────────────────────────────────────────
-const Icon = ({ d, size=20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d={d}/>
-  </svg>
-);
-const IconChart    = () => <Icon d="M3 3v18h18M7 16l4-4 4 4 4-4" />;
-const IconHome     = () => <Icon d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10" />;
-const IconSettings = () => <Icon d="M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />;
-const IconChevronLeft  = () => <Icon d="M15 18l-6-6 6-6" />;
-const IconMenu = () => <Icon d="M3 12h18M3 6h18M3 18h18" />;
-const IconARR  = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
-  </svg>
-);
-const IconPayroll = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="5" width="20" height="14" rx="2"/>
-    <line x1="2" y1="10" x2="22" y2="10"/>
-    <line x1="6" y1="15" x2="10" y2="15"/>
-    <line x1="14" y1="15" x2="18" y2="15"/>
-  </svg>
-);
-const IconHealth = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-  </svg>
-);
-const IconProductResearch = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
-  </svg>
-);
-
-// ── Dashboard Registry ─────────────────────────────────────────────────────────
-// Add future dashboards here as new entries. Each becomes a sidebar nav item.
-const DASHBOARD_NAV = [
-  { id:'finance', label:'Finance adjustments', icon:<IconChart />,   group:'Analytics' },
-  { id:'arr',     label:'ARR',                icon:<IconARR />,     group:'Analytics' },
-  { id:'payroll', label:'Payroll validation',  icon:<IconPayroll />, group:'Payroll'   },
-  { id:'health',  label:'Customer health',     icon:<IconHealth />,  group:'Customer Success' },
-  { id:'product-research', label:'Product research', icon:<IconProductResearch />, group:'Product' },
-];
-
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-const Sidebar = ({ open, onToggle, activeDash, onDashChange }) => {
-  const groups = [...new Set(DASHBOARD_NAV.map(d => d.group))];
-  return (
-    <aside className={`sidebar ${open ? 'open' : 'closed'}`}>
-      <div className="sidebar-logo-row">
-        {open && <span className="sidebar-wordmark">Playroll</span>}
-        <button className="sidebar-toggle" onClick={onToggle} title={open ? 'Collapse' : 'Expand'}>
-          {open ? <IconChevronLeft /> : <IconMenu />}
-        </button>
-      </div>
-      <nav className="sidebar-nav">
-        <button className={`nav-item${activeDash==='home'?' active':''}`} onClick={()=>onDashChange('home')} style={{marginBottom:'4px'}}>
-          <span className="nav-icon"><IconHome /></span>
-          {open && <span className="nav-label">Home</span>}
-        </button>
-        <div className="sidebar-divider" />
-        {groups.map(group => (
-          <React.Fragment key={group}>
-            {open && <div className="sidebar-section-label">{group}</div>}
-            {DASHBOARD_NAV.filter(d => d.group === group).map(d => (
-              <button
-                key={d.id}
-                className={`nav-item${activeDash === d.id ? ' active' : ''}`}
-                onClick={() => onDashChange(d.id)}
-                title={!open ? d.label : undefined}
-              >
-                <span className="nav-icon">{d.icon}</span>
-                {open && <span className="nav-label">{d.label}</span>}
-              </button>
-            ))}
-          </React.Fragment>
-        ))}
-      </nav>
-      <div className="sidebar-footer">
-        <button className="nav-item" title={!open ? 'Settings' : undefined}>
-          <span className="nav-icon"><IconSettings /></span>
-          {open && <span className="nav-label">Settings</span>}
-        </button>
-      </div>
-    </aside>
-  );
-};
-
-// ── Coverage Banner (Playroll design) ────────────────────────────────────────
-const CoverageBanner = ({ rawCount, cleanedCount }) => {
-  const pct     = rawCount ? (cleanedCount / rawCount * 100) : 0;
-  const missing = rawCount - cleanedCount;
-  return (
-    <div style={{
-      background:'#FFF8EC', border:'1px solid #FFD580',
-      borderRadius:'var(--radius)', padding:'10px 16px',
-      marginBottom:'16px', display:'flex', alignItems:'center',
-      gap:'12px', flexWrap:'wrap'
-    }}>
-      <span style={{
-        background:'#FFA726', color:'#fff',
-        borderRadius:'var(--radius-chip)', padding:'2px 10px',
-        fontSize:'0.6875rem', fontWeight:600
-      }}>Partial data</span>
-      <span style={{color:'var(--text-secondary)', fontSize:'0.75rem', fontWeight:500}}>
-        {fmt.number(cleanedCount)} of {fmt.number(rawCount)} records classified ({pct.toFixed(1)}%)
-        — <strong style={{color:'var(--text-primary)'}}>{fmt.number(missing)} records</strong> pending taxonomy assignment.
-        Product gaps and trend analysis reflect classified records only.
-      </span>
-    </div>
-  );
-};
-
-// ── Home Page ────────────────────────────────────────────────────────────────────────────────
-const HomePage = ({ onNavigate }) => {
-  const TOOLS = [
-    {
-      id:    'finance',
-      label: 'Finance adjustments',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
-        </svg>
-      ),
-      desc:  'Analyse payroll adjustment variances by primary aspect, sub-category, territory and company. Drill into monthly trends and identify product gaps.',
-      status:'live',
-      color: 'var(--color-primary-main)',
-      bg:    '#5110DD10',
-    },
-    {
-      id:    'arr',
-      label: 'ARR',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
-      ),
-      desc:  'Track monthly ARR by sub-category, monitor churn and pipeline conversion, and view expansion and contraction across the portfolio.',
-      status:'live',
-      color: '#0F6E56',
-      bg:    '#0F6E5610',
-    },
-    {
-      id:    'payroll',
-      label: 'Payroll validation',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="5" width="20" height="14" rx="2"/>
-          <line x1="2" y1="10" x2="22" y2="10"/>
-          <line x1="6" y1="15" x2="10" y2="15"/>
-          <line x1="14" y1="15" x2="18" y2="15"/>
-        </svg>
-      ),
-      desc:  'Review month-on-month payroll movements, employee delta breakdowns, and surface stale simulation alerts across all territories.',
-      status:'live',
-      color: '#185FA5',
-      bg:    '#185FA510',
-    },
-    {
-      id:    'health',
-      label: 'Customer health',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-        </svg>
-      ),
-      desc:  'Monitor customer health scores across your portfolio. Track RAG status by account, NPS, CSM sentiment and support ticket trends. Identify at-risk accounts and prioritise outreach.',
-      status:'live',
-      color: '#C0392B',
-      bg:    '#C0392B10',
-    },
-    {
-      id:    'product-research',
-      label: 'Product research',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
-        </svg>
-      ),
-      desc:  'Research insights, competitive analysis and market data to inform the Playroll product roadmap.',
-      status:'live',
-      color: '#5110DD',
-      bg:    '#5110DD10',
-    },
-    {
-      id:    'hr',
-      label: 'HR analytics',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
-      ),
-      desc:  'Headcount trends, attrition analysis and workforce planning across all Playroll entities and territories.',
-      status:'soon',
-      color: '#BA7517',
-      bg:    '#BA751710',
-    },
-    {
-      id:    'ops',
-      label: 'Operations',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-        </svg>
-      ),
-      desc:  'Payroll processing SLAs, provider performance benchmarks and operational health metrics.',
-      status:'soon',
-      color: '#6B7280',
-      bg:    '#6B728010',
-    },
-  ];
-
-  const STATUS = {
-    live: { label:'Live',         color:'var(--color-success-main)',   bg:'#66BB6A15', border:'#66BB6A40' },
-    soon: { label:'Coming soon',  color:'var(--color-warning-main)',   bg:'#FFA72615', border:'#FFA72640' },
-    beta: { label:'Beta',         color:'var(--color-primary-light)',  bg:'#AF91EF15', border:'#AF91EF40' },
-  };
-
-  return (
-    <div className="tab-content" style={{maxWidth:'1100px'}}>
-
-      {/* Hero */}
-      <div style={{
-        background:'linear-gradient(135deg, #5110DD18 0%, #36B1FF10 100%)',
-        border:'1px solid #5110DD20',
-        borderRadius:'var(--radius)',
-        padding:'40px 48px',
-        marginBottom:'32px',
-        position:'relative',
-        overflow:'hidden',
-      }}>
-        {/* Decorative circles */}
-        <div style={{position:'absolute',top:'-40px',right:'-40px',width:'200px',height:'200px',borderRadius:'50%',background:'#5110DD08',pointerEvents:'none'}} />
-        <div style={{position:'absolute',bottom:'-60px',right:'120px',width:'160px',height:'160px',borderRadius:'50%',background:'#36B1FF08',pointerEvents:'none'}} />
-
-        {/* Beta badge */}
-        <div style={{
-          display:'inline-flex',alignItems:'center',gap:'6px',
-          background:'#AF91EF20',border:'1px solid #AF91EF50',
-          borderRadius:'var(--radius-chip)',
-          padding:'4px 12px',marginBottom:'16px',
-        }}>
-          <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'var(--color-primary-light)',display:'inline-block',animation:'pulse 2s infinite'}} />
-          <span style={{fontSize:'0.6875rem',fontWeight:600,color:'var(--color-primary-light)',letterSpacing:'.04em'}}>BETA — UNDER ACTIVE DEVELOPMENT</span>
-        </div>
-
-        <h1 style={{fontSize:'1.75rem',fontWeight:700,color:'var(--text-primary)',marginBottom:'10px',letterSpacing:'-0.02em',lineHeight:1.2}}>
-          Playroll Internal Analytics
-        </h1>
-        <p style={{fontSize:'0.9375rem',color:'var(--text-secondary)',maxWidth:'540px',lineHeight:1.65,marginBottom:'24px'}}>
-          A single place to understand financial adjustments, ARR trends, and operational performance across the Playroll portfolio. Built for the internal team.
-        </p>
-
-        {/* Under construction notice */}
-        <div style={{
-          display:'inline-flex',alignItems:'flex-start',gap:'10px',
-          background:'#FFA72610',border:'1px solid #FFA72640',
-          borderRadius:'var(--radius-sm)',padding:'10px 16px',
-          maxWidth:'560px',
-        }}>
-          <span style={{fontSize:'16px',flexShrink:0,marginTop:'1px'}}>🚧</span>
-          <div>
-            <div style={{fontSize:'0.8125rem',fontWeight:600,color:'#BA7517',marginBottom:'3px'}}>Under construction</div>
-            <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',lineHeight:1.5}}>
-              This tool is in active development. Data, layouts and features may change. If you spot an issue or have a request, reach out to the analytics team.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tool cards */}
-      <div style={{marginBottom:'12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <h2 style={{fontSize:'0.875rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase',letterSpacing:'.06em'}}>Available dashboards</h2>
-        <span style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>{TOOLS.filter(t=>t.status==='live').length} of {TOOLS.length} live</span>
-      </div>
-
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'14px',marginBottom:'40px'}}>
-        {TOOLS.map(tool => {
-          const st = STATUS[tool.status];
-          const isLive = tool.status === 'live';
-          return (
-            <div
-              key={tool.id}
-              onClick={() => isLive && onNavigate(tool.id)}
-              style={{
-                background:'var(--bg-paper)',
-                border:`1px solid ${isLive ? 'var(--container-outline-variant)' : 'var(--surface-high)'}`,
-                borderRadius:'var(--radius)',
-                padding:'22px 24px',
-                cursor: isLive ? 'pointer' : 'default',
-                transition:'all .18s',
-                opacity: isLive ? 1 : 0.7,
-                boxShadow: 'var(--shadow-elevation)',
-                position:'relative',
-                overflow:'hidden',
-              }}
-              onMouseEnter={e => { if(isLive) { e.currentTarget.style.borderColor='var(--color-primary-main)'; e.currentTarget.style.boxShadow='0 4px 16px rgba(81,16,221,0.12)'; } }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor=isLive?'var(--container-outline-variant)':'var(--surface-high)'; e.currentTarget.style.boxShadow='var(--shadow-elevation)'; }}
-            >
-              {/* Top accent */}
-              <div style={{position:'absolute',top:0,left:0,right:0,height:'3px',background:isLive?tool.color:'var(--surface-high)',borderRadius:'var(--radius) var(--radius) 0 0'}} />
-
-              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'14px',paddingTop:'4px'}}>
-                <div style={{
-                  width:'48px',height:'48px',borderRadius:'12px',
-                  background: tool.bg, color: tool.color,
-                  display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
-                }}>
-                  {tool.icon}
-                </div>
-                <span style={{
-                  fontSize:'0.625rem',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',
-                  padding:'3px 10px',borderRadius:'var(--radius-chip)',
-                  background:st.bg, color:st.color, border:`1px solid ${st.border}`,
-                }}>
-                  {st.label}
-                </span>
-              </div>
-
-              <div style={{fontSize:'0.9375rem',fontWeight:600,color:'var(--text-primary)',marginBottom:'6px'}}>{tool.label}</div>
-              <div style={{fontSize:'0.8125rem',color:'var(--text-secondary)',lineHeight:1.55}}>{tool.desc}</div>
-
-              {isLive && (
-                <div style={{marginTop:'16px',fontSize:'0.75rem',fontWeight:600,color:'var(--color-primary-main)',display:'flex',alignItems:'center',gap:'4px'}}>
-                  Open dashboard
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Footer */}
-      <div style={{
-        borderTop:'1px solid var(--surface-high)',
-        paddingTop:'20px',
-        display:'flex',alignItems:'center',justifyContent:'space-between',
-        flexWrap:'wrap',gap:'10px',
-      }}>
-        <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
-          Playroll Internal Analytics · Beta v0.1 · For internal use only
-        </div>
-        <div style={{fontSize:'0.75rem',color:'var(--text-disabled)'}}>
-          Data refreshes when the page is reloaded
-        </div>
-      </div>
-
-    </div>
-  );
-};
-
-// ── PAYROLL DASHBOARD ─────────────────────────────────────────────────────────
-// Demo version: reads only the pre-processed Payroll_Dashboard_Summary row.
-// Details and flags are intentionally disabled for the demo to avoid loading
-// employee-level rows from Google Sheets.
-
-const fmtUSD = n => {
-  const v = parseFloat(n) || 0;
-  const abs = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1e6)  return `${sign}$${(abs/1e6).toFixed(2)}M`;
-  if (abs >= 1000) return `${sign}$${(abs/1000).toFixed(1)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
-};
-const fmtUSDFull = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(parseFloat(n)||0);
-const fmtPct = n => { const v = parseFloat(n)||0; return `${v>0?'+':''}${v.toFixed(1)}%`; };
-const fmtSignedUSD = n => { const v=parseFloat(n)||0; if(!v) return '$0'; return `${v>0?'+':''}${fmtUSD(v)}`; };
-const safeArr = v => Array.isArray(v) ? v : [];
-const monthFullLabel = value => {
-  if (!value) return '—';
-  const d = new Date(`${String(value).slice(0,10)}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString('en-GB',{month:'long',year:'numeric',timeZone:'UTC'});
-};
-
-const LIFE_BADGE = {
-  ACTIVE:                              { bg:'#EAF3DE', color:'#27500A' },
-  ACTIVE_WITH_FUTURE_END:             { bg:'#FEF3E2', color:'#7B4A00' },
-  NEW_STARTER:                        { bg:'#E6F1FB', color:'#0C447C' },
-  PRIOR_MONTH_NEW_STARTER:            { bg:'#E6F1FB', color:'#0C447C' },
-  PRIOR_MONTH_NEW_STARTER_PRORATED:   { bg:'#EEEDFE', color:'#3C3489' },
-  TERMINATION:                        { bg:'#FCEBEB', color:'#791F1F' },
-  PREVIOUSLY_TERMINATED:              { bg:'#FCEBEB', color:'#791F1F' },
-  SAME_MONTH_TERMINATION:             { bg:'#FFF4E5', color:'#8A4B00' },
-  FUTURE_STARTER:                     { bg:'#F1EFE8', color:'#5F5E5A' },
-};
-const PAY_BADGE = {
-  LOCAL:   { bg:'#E6F1FB', color:'#0C447C' },
-  PEGGED:  { bg:'#EEEDFE', color:'#3C3489' },
-  FOREIGN: { bg:'#E1F5EE', color:'#085041' },
-};
-const badgeFor = (map, key) => map[key] || { bg:'#F1EFE8', color:'#5F5E5A' };
-
-const Badge = ({ label, bg, color }) => (
-  <span style={{
-    display:'inline-block', padding:'2px 8px', borderRadius:'var(--radius-chip)',
-    fontSize:'0.625rem', fontWeight:600, background:bg, color, whiteSpace:'nowrap',
-  }}>{label}</span>
-);
-
-const PayrollMiniBar = ({ value, max }) => {
-  const v = parseFloat(value) || 0;
-  const pct = max ? Math.min(100, Math.abs(v) / max * 100) : 0;
-  const color = v < 0 ? 'var(--color-error-main)' : 'var(--color-success-main)';
-  return (
-    <div style={{display:'flex',alignItems:'center',gap:'8px',minWidth:'130px'}}>
-      <div style={{height:'7px',background:'var(--surface-high)',borderRadius:99,overflow:'hidden',flex:1}}>
-        <div style={{height:'100%',width:`${pct}%`,background:color,borderRadius:99}} />
-      </div>
-      <span style={{fontSize:'0.75rem',fontWeight:600,color}}>{fmtSignedUSD(v)}</span>
-    </div>
-  );
-};
-
-const PayrollJsonTable = ({ rows, columns, empty='No data available.' }) => {
-  if (!rows || !rows.length) return <div className="no-data" style={{padding:'24px'}}>{empty}</div>;
-  return (
-    <div className="table-wrap" style={{marginBottom:0}}>
-      <table className="data-table">
-        <thead>
-          <tr>{columns.map(c => <th key={c.key} className={c.align==='right'?'r':''}>{c.label}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.map((row, idx) => (
-            <tr key={idx}>
-              {columns.map(c => (
-                <td key={c.key} className={c.align==='right'?'r':''}>
-                  {c.render ? c.render(row, idx) : (row[c.key] ?? <Glimmer variant="text" />)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-const PayrollOverview = ({ summary, meta, loading=false }) => {
-  const [territoryLimit, setTerritoryLimit] = useState(12);
-  const [moverLimit, setMoverLimit] = useState(10);
-
-  // Keep hook order stable: never return before all hooks have run.
-  // While data is loading or missing, render the same cards/tables with placeholder values.
-  const hasSummary = !!(summary && summary.CURR_MONTH);
-  const isLoadingShell = loading || !hasSummary;
-  const showNoSummaryNote = !loading && !hasSummary;
-
-  const displaySummary = hasSummary ? summary : {
-    SUMMARY_KEY: '—', PREV_MONTH: '', CURR_MONTH: '', LAST_UPDATED: '',
-    PAYMENT_TYPE_JSON: [], TERRITORY_JSON: [], LIFECYCLE_JSON: [], TOP_MOVERS_JSON: [],
-    TOTAL_EMPLOYEES: null, ACTIVE_EMPLOYEES: null, NEW_STARTERS: null, TERMINATIONS: null,
-    PRIOR_MONTH_NEW_STARTERS: null, SAME_MONTH_TERMINATIONS: null,
-    CURRENT_MONTH_NEW_STARTER_TERMINATIONS: null,
-    STATUS_CHANGE_COUNT: null, SALARY_PAYMENT_CHANGE_COUNT: null,
-    DATE_CHANGE_COUNT: null, ANY_CHANGE_COUNT: null,
-    PREV_USD_TOT_EX: null, CURR_USD_TOT_EX: null,
-    USD_TOT_EX_DELTA: null, USD_TOT_EX_DELTA_PCT: null
-  };
-
-  summary = displaySummary;
-
-  const emptyRows = count => Array.from({ length: count }, () => ({}));
-  const showValue = (value, formatter) => isLoadingShell ? <Glimmer variant="text" /> : formatter(value);
-  const showMoney = value => showValue(value, fmtUSD);
-  const showSignedMoney = value => showValue(value, fmtSignedUSD);
-  const showNumber = value => showValue(value, fmt.number);
-  const showPct = value => showValue(value, fmtPct);
-
-  const paymentRows = isLoadingShell ? emptyRows(3) : safeArr(summary.PAYMENT_TYPE_JSON);
-  const territoryRows = isLoadingShell ? emptyRows(8) : safeArr(summary.TERRITORY_JSON);
-  const lifecycleRows = isLoadingShell ? emptyRows(6) : safeArr(summary.LIFECYCLE_JSON);
-  const topMovers = isLoadingShell ? emptyRows(8) : safeArr(summary.TOP_MOVERS_JSON);
-  const maxTerritoryDelta = Math.max(...territoryRows.map(r => Math.abs(parseFloat(r.usdDelta)||0)), 1);
-  const maxMoverDelta = Math.max(...topMovers.map(r => Math.abs(parseFloat(r.usdDelta)||0)), 1);
-  const deltaSign = (parseFloat(summary.USD_TOT_EX_DELTA)||0) >= 0 ? 'pos' : 'neg';
-
-  const paymentChart = useMemo(() => ({
-    type:'doughnut',
-    data:{
-      labels: paymentRows.map(r=>r.paymentType || 'Unknown'),
-      datasets:[{ data:paymentRows.map(r=>Number(r.currUsdTotal||0)), backgroundColor:['#5110DD','#36B1FF','#66BB6A','#FFA726'], borderWidth:0 }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{ position:'bottom', labels:{ color:'#49454F', font:{family:'Poppins',size:11}, boxWidth:12 } },
-        tooltip:{ callbacks:{ label: ctx => `${ctx.label}: ${fmtUSDFull(ctx.parsed)}` } }
-      }
-    }
-  }), [summary.SUMMARY_KEY]);
-
-  const lifecycleChart = useMemo(() => ({
-    type:'bar',
-    data:{
-      labels: lifecycleRows.map(r=>String(r.lifecycleStatus || 'Unknown').replace(/_/g,' ')),
-      datasets:[{ label:'Employees', data:lifecycleRows.map(r=>Number(r.employeeCount||0)), backgroundColor:'#5110DD30', borderColor:'#5110DD', borderWidth:1.5, borderRadius:6 }]
-    },
-    options:{
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => `${fmt.number(ctx.parsed.x)} employees` } } },
-      scales:{
-        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ color:'#E9E9EA' } },
-        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10} }, grid:{ display:false } }
-      }
-    }
-  }), [summary.SUMMARY_KEY]);
-
-  return (
-    <div className="tab-content">
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Payroll validation overview</h2>
-          <p className="section-sub">
-            {isLoadingShell ? 'Loading payroll summary…' : `Comparing ${monthFullLabel(summary.PREV_MONTH)} to ${monthFullLabel(summary.CURR_MONTH)} · summary-only demo view`}
-          </p>
-        </div>
-        <div style={{fontSize:'0.75rem',color:'var(--text-secondary)',textAlign:'right'}}>
-          <div>Summary key: <strong>{isLoadingShell ? <Glimmer variant="text" w="130px" /> : summary.SUMMARY_KEY}</strong></div>
-          <div>Last updated: {isLoadingShell ? <Glimmer variant="text" w="150px" /> : (summary.LAST_UPDATED || meta?.generatedAt || '—')}</div>
-        </div>
-      </div>
-
-      {showNoSummaryNote && (
-        <div className="chart-card" style={{border:'1px dashed var(--container-outline-variant)'}}>
-          <div className="section-title">No payroll summary available yet</div>
-          <p className="section-sub" style={{marginTop:'6px'}}>Run the n8n workflow to populate Payroll_Dashboard_Summary. The dashboard layout is visible below and will populate automatically once data is returned.</p>
-        </div>
-      )}
-
-      <div className="kpi-grid">
-        <KPICard label="Current payroll total" value={showMoney(summary.CURR_USD_TOT_EX)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmtPct(summary.USD_TOT_EX_DELTA_PCT)} vs previous month`} sign={deltaSign} />
-        <KPICard label="Previous payroll total" value={showMoney(summary.PREV_USD_TOT_EX)} sub="Comparison base" />
-        <KPICard label="Net payroll movement" value={showSignedMoney(summary.USD_TOT_EX_DELTA)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.ANY_CHANGE_COUNT)} employees changed`} sign={deltaSign} />
-        <KPICard label="Total employees" value={showNumber(summary.TOTAL_EMPLOYEES)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.ACTIVE_EMPLOYEES)} active employees`} />
-        <KPICard label="New starters" value={showNumber(summary.NEW_STARTERS)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.PRIOR_MONTH_NEW_STARTERS)} prior-month starters`} sign="pos" />
-        <KPICard label="Terminations" value={showNumber(summary.TERMINATIONS)} sub={isLoadingShell ? <Glimmer variant="sub" /> : `${fmt.number(summary.SAME_MONTH_TERMINATIONS)} same-month terminations`} sign="neg" />
-        <KPICard label="Status changes" value={showNumber(summary.STATUS_CHANGE_COUNT)} sub="Employee status changed" />
-        <KPICard label="Date changes" value={showNumber(summary.DATE_CHANGE_COUNT)} sub="Start or end date changed" />
-      </div>
-
-      <div className="peak-strip">
-        <div className="peak-item"><span className="peak-label">Salary payment changes</span><span className="peak-val">{showNumber(summary.SALARY_PAYMENT_CHANGE_COUNT)}</span></div>
-        <div className="peak-item"><span className="peak-label">Current-month starter terminations</span><span className="peak-val">{showNumber(summary.CURRENT_MONTH_NEW_STARTER_TERMINATIONS)}</span></div>
-        <div className="peak-item"><span className="peak-label">Current month</span><span className="peak-val">{isLoadingShell ? <Glimmer variant="text" w="90px" /> : monthFullLabel(summary.CURR_MONTH)}</span></div>
-        <div className="peak-item"><span className="peak-label">Data source</span><span className="peak-val">Payroll_Dashboard_Summary</span></div>
-      </div>
-
-      <div className="charts-row">
-        <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">Current payroll by payment type</div>
-          {isLoadingShell ? <ChartGlimmer height={230} label="Loading payment type chart…" /> : <ChartCanvas config={paymentChart} height={230} />}
-        </div>
-        <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">Lifecycle distribution</div>
-          {isLoadingShell ? <ChartGlimmer height={230} label="Loading lifecycle chart…" /> : <ChartCanvas config={lifecycleChart} height={230} />}
-        </div>
-      </div>
-
-      <div className="charts-row">
-        <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">Payment type breakdown</div>
-          <PayrollJsonTable
-            rows={paymentRows}
-            columns={[
-              { key:'paymentType', label:'Payment type', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(PAY_BADGE,r.paymentType); return <Badge label={r.paymentType || 'Unknown'} bg={c.bg} color={c.color} />; } },
-              { key:'employeeCount', label:'Employees', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmt.number(r.employeeCount) },
-              { key:'currUsdTotal', label:'Current total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
-              { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : <span className={(Number(r.usdDelta)||0)<0?'neg':'pos'}>{fmtSignedUSD(r.usdDelta)}</span> },
-            ]}
-          />
-        </div>
-
-        <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">Lifecycle breakdown</div>
-          <PayrollJsonTable
-            rows={lifecycleRows}
-            columns={[
-              { key:'lifecycleStatus', label:'Lifecycle', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(LIFE_BADGE,r.lifecycleStatus); return <Badge label={String(r.lifecycleStatus || 'Unknown').replace(/_/g,' ')} bg={c.bg} color={c.color} />; } },
-              { key:'employeeCount', label:'Employees', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmt.number(r.employeeCount) },
-              { key:'currUsdTotal', label:'Current total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
-              { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : <span className={(Number(r.usdDelta)||0)<0?'neg':'pos'}>{fmtSignedUSD(r.usdDelta)}</span> },
-            ]}
-          />
-        </div>
-      </div>
-
-      <div className="chart-card">
-        <div className="section-header" style={{marginBottom:'12px'}}>
-          <div>
-            <h3 className="section-title">Largest territory movements</h3>
-            <p className="section-sub">Sorted by absolute USD movement</p>
-          </div>
-          <select className="f-select" value={territoryLimit} onChange={e=>setTerritoryLimit(Number(e.target.value))}>
-            <option value={10}>Top 10</option>
-            <option value={20}>Top 20</option>
-            <option value={50}>Top 50</option>
-            <option value={territoryRows.length}>All</option>
-          </select>
-        </div>
-        <PayrollJsonTable
-          rows={territoryRows.slice(0, territoryLimit)}
-          columns={[
-            { key:'territory', label:'Territory' },
-            { key:'employeeCount', label:'Employees', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmt.number(r.employeeCount) },
-            { key:'prevUsdTotal', label:'Previous total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.prevUsdTotal) },
-            { key:'currUsdTotal', label:'Current total', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
-            { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="row" /> : <PayrollMiniBar value={r.usdDelta} max={maxTerritoryDelta} /> },
-          ]}
-        />
-      </div>
-
-      <div className="chart-card">
-        <div className="section-header" style={{marginBottom:'12px'}}>
-          <div>
-            <h3 className="section-title">Top employee movements</h3>
-            <p className="section-sub">Top employee-level movements already pre-computed by n8n</p>
-          </div>
-          <select className="f-select" value={moverLimit} onChange={e=>setMoverLimit(Number(e.target.value))}>
-            <option value={10}>Top 10</option>
-            <option value={20}>Top 20</option>
-          </select>
-        </div>
-        <PayrollJsonTable
-          rows={topMovers.slice(0, moverLimit)}
-          columns={[
-            { key:'employeeName', label:'Employee', render:r=><span style={{fontWeight:600}}>{isLoadingShell ? <Glimmer variant="text" w="120px" /> : (r.employeeName || r.eeId || 'Unknown')}</span> },
-            { key:'territory', label:'Territory' },
-            { key:'paymentType', label:'Payment', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(PAY_BADGE,r.paymentType); return <Badge label={r.paymentType || 'Unknown'} bg={c.bg} color={c.color} />; } },
-            { key:'lifecycleStatus', label:'Lifecycle', render:r => { if (isLoadingShell) return <Glimmer variant="badge" />; const c=badgeFor(LIFE_BADGE,r.lifecycleStatus); return <Badge label={String(r.lifecycleStatus || 'Unknown').replace(/_/g,' ')} bg={c.bg} color={c.color} />; } },
-            { key:'prevUsdTotal', label:'Previous', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.prevUsdTotal) },
-            { key:'currUsdTotal', label:'Current', align:'right', render:r=>isLoadingShell ? <Glimmer variant="text" /> : fmtUSD(r.currUsdTotal) },
-            { key:'usdDelta', label:'Movement', align:'right', render:r=>isLoadingShell ? <Glimmer variant="row" /> : <PayrollMiniBar value={r.usdDelta} max={maxMoverDelta} /> },
-          ]}
-        />
-      </div>
-    </div>
-  );
-};
-
-// ── Customer Health Dashboard ─────────────────────────────────────────────────
-
-const RAG_CONF = {
-  Red:     { color:'#F44336', bg:'#F4433618', text:'#C62828' },
-  Amber:   { color:'#FFA726', bg:'#FFA72618', text:'#E65100' },
-  Green:   { color:'#66BB6A', bg:'#66BB6A18', text:'#2E7D32' },
-  Missing: { color:'#9C96A2', bg:'#9C96A218', text:'#49454F' },
-  Unknown: { color:'#9C96A2', bg:'#9C96A218', text:'#49454F' },
-};
-
-const RagBadge = ({ rag }) => {
-  const c = RAG_CONF[rag] || RAG_CONF.Unknown;
-  return (
-    <span className="priority-badge" style={{background:c.bg, color:c.text, fontSize:'0.625rem'}}>
-      {rag || 'Unknown'}
-    </span>
-  );
-};
-
-const MetricDot = ({ rag, title }) => {
-  const c = RAG_CONF[rag] || RAG_CONF.Unknown;
-  return (
-    <span title={title} style={{display:'inline-block', width:8, height:8, borderRadius:'50%', background:c.color, marginRight:3, flexShrink:0}} />
-  );
-};
-
-const H_PRIORITY = {
-  high:   { color:'#F44336', bg:'#F4433618', label:'High' },
-  medium: { color:'#FFA726', bg:'#FFA72618', label:'Medium' },
-  low:    { color:'#66BB6A', bg:'#66BB6A18', label:'Low' },
-};
-
-const CustomerHealthDashboard = ({ summary, meta, loading }) => {
-  const s   = summary || {};
-  const isL = loading || !summary;
-
-  const total  = Number(s.TOTAL_COMPANIES)      || 0;
-  const avg    = Number(s.AVG_SCORE)            || 0;
-  const red    = Number(s.RED_COUNT)            || 0;
-  const amber  = Number(s.AMBER_COUNT)          || 0;
-  const green  = Number(s.GREEN_COUNT)          || 0;
-  const hiPri  = Number(s.HIGH_PRIORITY_COUNT)  || 0;
-  const npsRte = Number(s.NPS_DATA_RATE_PCT)    || 0;
-  const msr    = Number(s.METRIC_SUCCESS_RATE)  || 0;
-  const noNps  = Number(s.MISSING_NPS_COUNT)    || 0;
-
-  const top10 = Array.isArray(s.TOP_10_AT_RISK_JSON) ? s.TOP_10_AT_RISK_JSON : [];
-  const bd    = s.METRIC_BREAKDOWN_JSON || {
-    growth:{green:0,amber:0,red:0,missing:0}, csm:{green:0,amber:0,red:0,missing:0},
-    nps:{green:0,amber:0,red:0,missing:0},    support:{green:0,amber:0,red:0,missing:0}
-  };
-  const dist  = s.SCORE_DISTRIBUTION_JSON || { '0-25':0, '26-50':0, '51-75':0, '76-100':0 };
-
-  const gaugeColor = avg < 50 ? '#F44336' : avg < 70 ? '#FFA726' : '#66BB6A';
-  const gaugeLabel = avg < 50 ? 'At risk' : avg < 70 ? 'Needs attention' : 'Healthy';
-  const gaugeTextColor = avg < 50 ? '#C62828' : avg < 70 ? '#E65100' : '#2E7D32';
-
-  // ── Gauge (semi-circle doughnut) ──────────────────────────────────────────
-  const gaugeCfg = useMemo(() => ({
-    type:'doughnut',
-    data:{
-      datasets:[{
-        data:[avg, 100 - avg],
-        backgroundColor:[gaugeColor, '#E9E9EA'],
-        borderWidth:0,
-        hoverOffset:0
-      }]
-    },
-    options:{
-      rotation:-90, circumference:180, cutout:'78%',
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{enabled:false} }
-    }
-  }), [avg, gaugeColor]);
-
-  // ── RAG Donut ─────────────────────────────────────────────────────────────
-  const ragCfg = useMemo(() => ({
-    type:'doughnut',
-    data:{
-      labels:['Green','Amber','Red'],
-      datasets:[{ data:[green,amber,red], backgroundColor:['#66BB6A','#FFA726','#F44336'], borderWidth:0 }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false, cutout:'65%',
-      plugins:{
-        legend:{ position:'right', labels:{ color:'#49454F', font:{family:'Poppins',size:11}, padding:10, boxWidth:12 } },
-        tooltip:{ callbacks:{ label: ctx=>`${ctx.label}: ${ctx.parsed} account${ctx.parsed!==1?'s':''}` } }
-      }
-    }
-  }), [red, amber, green]);
-
-  // ── Metric Health Matrix (stacked horizontal bar) ─────────────────────────
-  const matrixCfg = useMemo(() => ({
-    type:'bar',
-    data:{
-      labels:['Support Tickets','Net Promoter Score','CSM Sentiment','Employee Growth'],
-      datasets:[
-        { label:'Green',   data:[bd.support.green,  bd.nps.green,  bd.csm.green,  bd.growth.green],   backgroundColor:'#66BB6A', stack:'s' },
-        { label:'Amber',   data:[bd.support.amber,  bd.nps.amber,  bd.csm.amber,  bd.growth.amber],   backgroundColor:'#FFA726', stack:'s' },
-        { label:'Red',     data:[bd.support.red,    bd.nps.red,    bd.csm.red,    bd.growth.red],     backgroundColor:'#F44336', stack:'s' },
-        { label:'No data', data:[bd.support.missing,bd.nps.missing,bd.csm.missing,bd.growth.missing], backgroundColor:'#E9E9EA', stack:'s' },
-      ]
-    },
-    options:{
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{ labels:{ color:'#49454F', font:{family:'Poppins',size:11}, boxWidth:12, padding:12 } },
-        tooltip:{ callbacks:{ label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.x} company${ctx.parsed.x!==1?'s':''}` } }
-      },
-      scales:{
-        x:{ stacked:true, ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, stepSize:1 }, grid:{color:'#E9E9EA'}, title:{ display:true, text:'Number of companies', color:'#49454F', font:{family:'Poppins',size:10} } },
-        y:{ stacked:true, ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{display:false} }
-      }
-    }
-  }), [bd]);
-
-  // ── Score Distribution (histogram) ────────────────────────────────────────
-  const distCfg = useMemo(() => ({
-    type:'bar',
-    data:{
-      labels:['0 – 25','26 – 50','51 – 75','76 – 100'],
-      datasets:[{
-        label:'Companies',
-        data:[dist['0-25'], dist['26-50'], dist['51-75'], dist['76-100']],
-        backgroundColor:['#F44336','#FFA726','#5110DD','#66BB6A'],
-        borderRadius:6, borderWidth:0
-      }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>`${ctx.parsed.y} company${ctx.parsed.y!==1?'s':''}` } } },
-      scales:{
-        x:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:11} }, grid:{display:false}, title:{ display:true, text:'Health score band', color:'#49454F', font:{family:'Poppins',size:10} } },
-        y:{ ticks:{ color:'#49454F', font:{family:'Poppins',size:10}, stepSize:1 }, grid:{color:'#E9E9EA'}, title:{ display:true, text:'Companies', color:'#49454F', font:{family:'Poppins',size:10} } }
-      }
-    }
-  }), [dist]);
-
-  return (
-    <div className="tab-content">
-
-      {/* ── KPI Cards ── */}
-      <div className="kpi-grid">
-        <KPICard label="Avg health score"       value={isL ? null : avg}               sub={isL ? null : `${total} accounts scored · ${s.SCORE_DATE || '—'}`} loading={isL} />
-        <KPICard label="Red accounts"           value={isL ? null : red}               sub={isL ? null : 'Require immediate action'} sign={!isL && red > 0 ? 'neg' : null} loading={isL} />
-        <KPICard label="Amber accounts"         value={isL ? null : amber}             sub={isL ? null : `${green} green · ${total} total`} loading={isL} />
-        <KPICard label="High-priority actions"  value={isL ? null : hiPri}             sub={isL ? null : 'Accounts with at least one urgent action'} sign={!isL && hiPri > 0 ? 'neg' : null} loading={isL} />
-        <KPICard label="NPS data coverage"      value={isL ? null : `${npsRte}%`}      sub={isL ? null : `${noNps} account${noNps!==1?'s':''} have no NPS responses yet`} loading={isL} />
-        <KPICard label="Metric success rate"    value={isL ? null : `${msr}%`}         sub="Share of metrics with usable data" loading={isL} />
-      </div>
-
-      {/* ── Row 1: Health Gauge + RAG Donut ── */}
-      <div className="charts-row">
-        <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">Portfolio health gauge</div>
-          {isL ? <ChartGlimmer height={200} label="Loading gauge…" /> : (
-            <div style={{position:'relative', height:'200px', display:'flex', alignItems:'center', justifyContent:'center'}}>
-              <ChartCanvas config={gaugeCfg} height={200} />
-              <div style={{position:'absolute', bottom:'12px', textAlign:'center', pointerEvents:'none', width:'100%'}}>
-                <div style={{fontSize:'2.25rem', fontWeight:700, color:gaugeColor, lineHeight:1}}>{avg}</div>
-                <div style={{fontSize:'0.6875rem', color:'var(--text-secondary)', marginTop:'2px'}}>out of 100</div>
-                <div style={{marginTop:'6px'}}>
-                  <span className="priority-badge" style={{background: gaugeColor+'20', color:gaugeTextColor, fontSize:'0.625rem'}}>{gaugeLabel}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="chart-card" style={{flex:1}}>
-          <div className="chart-title">RAG distribution</div>
-          {isL ? <ChartGlimmer height={200} label="Loading RAG split…" /> : (
-            <div style={{position:'relative', height:'200px'}}>
-              <ChartCanvas config={ragCfg} height={200} />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Row 2: Metric Health Matrix ── */}
-      <div className="chart-card">
-        <div className="chart-title">Metric health matrix — company count by RAG status per metric</div>
-        {isL ? <ChartGlimmer height={180} label="Loading metric matrix…" /> : <ChartCanvas config={matrixCfg} height={180} />}
-      </div>
-
-      {/* ── Row 3: Score Distribution ── */}
-      <div className="chart-card">
-        <div className="chart-title">Score distribution</div>
-        {isL ? <ChartGlimmer height={180} label="Loading score distribution…" /> : <ChartCanvas config={distCfg} height={180} />}
-      </div>
-
-      {/* ── Row 4: Top 10 At-Risk ── */}
-      <div className="chart-card">
-        <div className="section-header" style={{marginBottom:'12px'}}>
-          <div>
-            <h3 className="section-title">Top 10 at-risk accounts</h3>
-            <p className="section-sub">Sorted by health score ascending — lowest first</p>
-          </div>
-          {!isL && s.SCORE_DATE && (
-            <div style={{fontSize:'0.75rem', color:'var(--text-secondary)'}}>As of {s.SCORE_DATE}</div>
-          )}
-        </div>
-        <div className="table-wrap" style={{marginBottom:0}}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{width:28}}>#</th>
-                <th>Company</th>
-                <th className="r">Score</th>
-                <th>Status</th>
-                <th>Metrics <span style={{fontWeight:400,color:'var(--text-disabled)',fontSize:'0.5625rem'}}>G·C·N·S</span></th>
-                <th>Top recommended action</th>
-                <th>Priority</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isL
-                ? <LoadingTableRows columns={7} rows={5} />
-                : top10.length === 0
-                  ? <tr><td colSpan={7} className="no-data">No at-risk data yet — run the n8n pipeline first.</td></tr>
-                  : top10.map((co, i) => {
-                      const pConf = H_PRIORITY[co.top_action?.priority] || H_PRIORITY.medium;
-                      const scoreColor = co.score < 50 ? '#F44336' : co.score < 70 ? '#FFA726' : '#66BB6A';
-                      return (
-                        <tr key={co.company_id || i}>
-                          <td style={{color:'var(--text-disabled)', fontWeight:600, fontSize:'0.75rem'}}>{i + 1}</td>
-                          <td style={{fontWeight:600}}>{co.company_name}</td>
-                          <td className="r" style={{fontWeight:700, color:scoreColor, fontSize:'1.05rem'}}>{co.score}</td>
-                          <td><RagBadge rag={co.rag} /></td>
-                          <td>
-                            <span style={{display:'inline-flex', alignItems:'center'}}>
-                              <MetricDot rag={co.metrics?.growth}  title={`Employee Growth: ${co.metrics?.growth}`} />
-                              <MetricDot rag={co.metrics?.csm}     title={`CSM Sentiment: ${co.metrics?.csm}`} />
-                              <MetricDot rag={co.metrics?.nps}     title={`NPS: ${co.metrics?.nps}`} />
-                              <MetricDot rag={co.metrics?.support} title={`Support: ${co.metrics?.support}`} />
-                            </span>
-                          </td>
-                          <td style={{maxWidth:'260px', overflow:'hidden', textOverflow:'ellipsis', color:'var(--text-secondary)', fontSize:'0.75rem'}}>
-                            {co.top_action
-                              ? <span><span style={{color:'var(--text-primary)', fontWeight:500}}>{co.top_action.metric}:</span> {co.top_action.title}</span>
-                              : '—'}
-                          </td>
-                          <td>
-                            {co.top_action
-                              ? <span className="priority-badge" style={{background:pConf.bg, color:pConf.color, fontSize:'0.625rem'}}>{pConf.label}</span>
-                              : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  );
-};
-
-// ── APP ROOT ──────────────────────────────────────────────────────────────────
 
 const App = () => {
-  // FME state — loads immediately on mount
-  const [fme, setFme]       = useState({ loading:true, error:null, rawData:[], cleanedData:[], taxonomy:[], meta:{} });
-  // ARR state — loads lazily on first selection
-  const [arr, setArr]       = useState({ loading:false, loaded:false, error:null, arrMetrics:[], arrSummary:{}, arrFlagCount:{}, arrCompanies:[], meta:{} });
-  // Payroll state — loads lazily on first selection.
-  // Demo version reads only Payroll_Dashboard_Summary.
-  const [payroll, setPayroll] = useState({
-    loading:false, loaded:false, error:null,
-    months:[], selectedMonth:null,
-    summary:null, meta:{},
-  });
-  // Customer Health state — loads lazily on first selection
-  const [health, setHealth] = useState({ loading:false, loaded:false, error:null, summary:null, meta:{} });
+  const [financeRows, setFinanceRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const [activeTab, setTab]     = useState('overview');
-  const [activeDash, setDash]   = useState('home');
-  const [sidebarOpen, setSidebar] = useState(true);
-
-  // ── Load FME on mount ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
-      setFme(s=>({...s, loading:false, error:'APPS_SCRIPT_URL is not configured. Open index.html and replace YOUR_APPS_SCRIPT_URL_HERE with your deployed Apps Script URL.'}));
-      return;
-    }
-    fetch(APPS_SCRIPT_URL)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(d => {
-        if (d.error) throw new Error(d.error);
-        setFme({
-          loading:false, error:null,
-          rawData:    d.rawData     || d.cleanedData || [],
-          cleanedData:d.cleanedData || [],
-          taxonomy:   d.taxonomy    || [],
-          meta:       d.meta        || {}
-        });
-      })
-      .catch(err => setFme(s=>({...s, loading:false, error:err.message})));
-  }, []);
-
-  // ── Load ARR lazily when tab first selected ─────────────────────────────────
-  useEffect(() => {
-    if (activeDash !== 'arr') return;
-    if (arr.loaded || arr.loading) return;
-
-    if (!ARR_SCRIPT_URL || ARR_SCRIPT_URL === 'YOUR_ARR_SCRIPT_URL_HERE') {
-      setArr(s => ({ ...s, loading:false, loaded:false, error:'ARR_SCRIPT_URL is not configured.' }));
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-
-    setArr(s=>({...s, loading:true, error:null}));
-    fetch(`${ARR_SCRIPT_URL}?mode=summary`, { method:'GET', signal:controller.signal, cache:'no-store' })
-      .then(async r => {
-        const text = await r.text();
-        if (!r.ok) throw new Error(`ARR endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
-        try { return JSON.parse(text); }
-        catch (e) { throw new Error(`ARR endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
-      })
-      .then(d => {
-        if (d.error) throw new Error(d.error);
-
-        console.log('ARR response meta:', d.meta);
-        console.log('ARR summary keys:', Object.keys(d.arrSummary || {}));
-        console.log('ARR first month summary:', Object.entries(d.arrSummary || {})[0]);
-        console.log('ARR metrics sample:', (d.arrMetrics || []).slice(0, 5));
-
-        setArr({
-          loading:false, loaded:true, error:null,
-          arrMetrics:   Array.isArray(d.arrMetrics) ? d.arrMetrics : [],
-          arrSummary:   d.arrSummary && typeof d.arrSummary === 'object' ? d.arrSummary : {},
-          arrFlagCount: d.arrFlagCount && typeof d.arrFlagCount === 'object' ? d.arrFlagCount : {},
-          arrCompanies: [],
-          meta:         d.meta || {},
-        });
-      })
-      .catch(err => {
-        const msg = err.name === 'AbortError'
-          ? 'ARR data request timed out after 30 seconds. The Apps Script is likely taking too long to read the Google Sheet.'
-          : err.message;
-        setArr(s=>({...s, loading:false, loaded:false, error:msg}));
-      })
-      .finally(() => clearTimeout(timeout));
-  }, [activeDash, arr.loaded, arr.loading]);
-
-  // ── Load Payroll summary on first selection ────────────────────────────────
-  useEffect(() => {
-    if (activeDash !== 'payroll') return;
-    if (payroll.loaded || payroll.loading) return;
-
-    if (!PAYROLL_SCRIPT_URL || PAYROLL_SCRIPT_URL === 'YOUR_PAYROLL_SCRIPT_URL_HERE') {
-      setPayroll(s => ({ ...s, loading:false, loaded:false, error:'PAYROLL_SCRIPT_URL is not configured.' }));
-      return;
-    }
-
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 30000);
-
-    setPayroll(s => ({ ...s, loading:true, error:null }));
-
-    fetch(`${PAYROLL_SCRIPT_URL}?mode=months`, { signal: ctrl.signal, cache:'no-store' })
-      .then(async r => {
-        const text = await r.text();
-        if (!r.ok) throw new Error(`Months endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
-        try { return JSON.parse(text); }
-        catch (e) { throw new Error(`Months endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
-      })
-      .then(async monthsData => {
-        if (monthsData.error) throw new Error(monthsData.error);
-
-        const months = Array.isArray(monthsData.months) ? monthsData.months : [];
-        const latestMonth = monthsData.latestMonth || months[months.length - 1] || '';
-
-        if (!latestMonth) {
-          setPayroll(s => ({ ...s, loading:false, loaded:true, months, selectedMonth:'', summary:null, meta:monthsData.meta || {} }));
-          return;
+    const load = async () => {
+      try {
+        if (!db) {
+          throw new Error('Supabase public configuration is missing. Set window.__DASHBOARD_CONFIG__ with supabaseUrl and supabaseAnonKey.');
         }
 
-        const summaryRes = await fetch(
-          `${PAYROLL_SCRIPT_URL}?mode=summary&month=${encodeURIComponent(latestMonth)}`,
-          { signal: ctrl.signal, cache:'no-store' }
-        );
-        const summaryText = await summaryRes.text();
-        if (!summaryRes.ok) throw new Error(`Summary endpoint failed with HTTP ${summaryRes.status}: ${summaryText.slice(0, 300)}`);
+        const finance = await fetchAll('finance_adjustments_data', 'UPDATED_AT');
+        setFinanceRows(finance);
+      } catch (e) {
+        setError(e.message || String(e));
+      } finally {
+        setLoading(false);
+      }
+    };
 
-        let summaryData;
-        try { summaryData = JSON.parse(summaryText); }
-        catch (e) { throw new Error(`Summary endpoint did not return valid JSON. Response started with: ${summaryText.slice(0, 300)}`); }
+    load();
+  }, []);
 
-        if (summaryData.error) throw new Error(summaryData.error);
-
-        setPayroll({
-          loading:false,
-          loaded:true,
-          error:null,
-          months,
-          selectedMonth: latestMonth,
-          summary: summaryData.summary || summaryData.payrollSummary || null,
-          meta: summaryData.meta || {},
-        });
-      })
-      .catch(err => {
-        const msg = err.name === 'AbortError' ? 'Payroll summary request timed out after 30 seconds.' : err.message;
-        setPayroll(s => ({ ...s, loading:false, loaded:false, error:msg }));
-      })
-      .finally(() => clearTimeout(timeout));
-  }, [activeDash, payroll.loaded, payroll.loading]);
-
-  // ── Reload Payroll summary when the selected month changes ─────────────────
-  useEffect(() => {
-    if (activeDash !== 'payroll') return;
-    if (!payroll.selectedMonth) return;
-    if (!payroll.loaded) return;
-
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 30000);
-    const month = payroll.selectedMonth;
-
-    setPayroll(s => ({ ...s, loading:true, error:null, summary:null }));
-
-    fetch(`${PAYROLL_SCRIPT_URL}?mode=summary&month=${encodeURIComponent(month)}`, {
-      signal: ctrl.signal,
-      cache:'no-store'
-    })
-      .then(async r => {
-        const text = await r.text();
-        if (!r.ok) throw new Error(`Summary endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
-        try { return JSON.parse(text); }
-        catch (e) { throw new Error(`Summary endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
-      })
-      .then(d => {
-        if (d.error) throw new Error(d.error);
-        setPayroll(s => ({
-          ...s,
-          loading:false,
-          loaded:true,
-          summary: d.summary || d.payrollSummary || null,
-          meta: d.meta || {},
-        }));
-      })
-      .catch(err => {
-        const msg = err.name === 'AbortError' ? 'Payroll summary request timed out after 30 seconds.' : err.message;
-        setPayroll(s => ({ ...s, loading:false, error:msg }));
-      })
-      .finally(() => clearTimeout(timeout));
-  }, [payroll.selectedMonth]);
-
-  // ── Load Customer Health lazily when tab first selected ───────────────────
-  useEffect(() => {
-    if (activeDash !== 'health') return;
-    if (health.loaded || health.loading) return;
-
-    if (!HEALTH_SCRIPT_URL || HEALTH_SCRIPT_URL === 'YOUR_HEALTH_SCRIPT_URL_HERE') {
-      setHealth(s => ({ ...s, loading:false, loaded:false, error:'HEALTH_SCRIPT_URL is not configured. Deploy CustomerHealth_AppScript.gs and paste the /exec URL into index.html.' }));
-      return;
-    }
-
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 30000);
-
-    setHealth(s => ({ ...s, loading:true, error:null }));
-
-    fetch(`${HEALTH_SCRIPT_URL}?mode=healthSummary`, { signal:ctrl.signal, cache:'no-store' })
-      .then(async r => {
-        const text = await r.text();
-        if (!r.ok) throw new Error(`Health endpoint failed with HTTP ${r.status}: ${text.slice(0, 300)}`);
-        try { return JSON.parse(text); }
-        catch (e) { throw new Error(`Health endpoint did not return valid JSON. Response started with: ${text.slice(0, 300)}`); }
-      })
-      .then(d => {
-        if (d.error) throw new Error(d.error);
-        setHealth({ loading:false, loaded:true, error:null, summary:d.summary || null, meta:d.meta || {} });
-      })
-      .catch(err => {
-        const msg = err.name === 'AbortError' ? 'Health data request timed out after 30 seconds.' : err.message;
-        setHealth(s => ({ ...s, loading:false, loaded:false, error:msg }));
-      })
-      .finally(() => clearTimeout(timeout));
-  }, [activeDash, health.loaded, health.loading]);
-
-  const { rawData, cleanedData, taxonomy, meta } = fme;
-  const isPartial = cleanedData.length < rawData.length;
-  const showTabs  = activeDash === 'finance';
-  const TABS      = [['overview','Overview'],['gaps','Product gaps'],['trend','Trend analysis']];
-  const PAYROLL_TABS = [['overview','Overview']];
-  const activeMeta = activeDash === 'arr' ? arr.meta : activeDash === 'payroll' ? payroll.meta : activeDash === 'health' ? health.meta : meta;
-
-  const handleDashChange = id => { setDash(id); setTab('overview'); };
-
-  // ── Header subtitle ─────────────────────────────────────────────────────────
-  const headerSub =
-    activeDash === 'home'    ? 'Playroll Internal Analytics · Beta' :
-    activeDash === 'arr'
-      ? arr.loading ? 'Loading ARR data…'
-        : arr.loaded ? `ARR intelligence · ${Object.keys(arr.arrSummary).length} months`
-        : 'Select to load'
-    : activeDash === 'payroll'
-      ? payroll.loading ? 'Loading payroll data…'
-        : payroll.loaded ? `Payroll validation summary · ${payroll.summary?.TOTAL_EMPLOYEES ? fmt.number(payroll.summary.TOTAL_EMPLOYEES) : '—'} employees · ${payroll.months.length} months available`
-        : 'Select to load'
-    : activeDash === 'health'
-      ? health.loading ? 'Loading health data…'
-        : health.loaded ? `Customer health · ${health.summary?.TOTAL_COMPANIES || '—'} accounts · scored ${health.summary?.SCORE_DATE || '—'}`
-        : 'Select to load'
-    : activeDash === 'product-research' ? 'Product research'
-    : fme.loading ? 'Loading…'
-      : `Variance analysis intelligence · ${fmt.number(rawData.length)} total records${isPartial ? ` · ${fmt.number(cleanedData.length)} classified` : ''}`;
+  if (loading) return <LoadingScreen />;
+  if (error) return <ErrorScreen message={error} />;
 
   return (
     <div className="shell">
-      <Sidebar
-        open={sidebarOpen}
-        onToggle={() => setSidebar(o => !o)}
-        activeDash={activeDash}
-        onDashChange={handleDashChange}
-      />
-
-      <div className="app">
+      <aside className="sidebar open">
+        <div className="sidebar-logo-row">
+          <div className="sidebar-wordmark">Playroll</div>
+        </div>
+        <div className="sidebar-section-label">Product  2.0</div>
+        <nav className="sidebar-nav">
+          <button className="nav-item active" type="button">
+            <span className="nav-icon">F</span>
+            <span className="nav-label">Finance Adjustments</span>
+          </button>
+        </nav>
+      </aside>
+      <main className="app">
         <header className="app-header">
           <div className="header-left">
-            <div className="logo">{activeDash==='home' ? 'Internal Analytics' : activeDash==='arr' ? 'ARR' : activeDash==='payroll' ? 'Payroll validation' : activeDash==='health' ? 'Customer health' : activeDash==='product-research' ? 'Product research' : 'Finance adjustments'}</div>
-            <div className="header-sub">{headerSub} · Updated {activeMeta?.generatedAt ? new Date(activeMeta.generatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
+            <div className="logo">Product Dashboard 2.0</div>
+            <div className="header-sub">Supabase-backed main page only · {financeRows.length} finance records</div>
           </div>
-          <nav className="tab-nav">
-            {activeDash === 'payroll' && (
-              <>
-                {payroll.months.length > 0 && (
-                  <select className="f-select" style={{marginRight:'8px'}} value={payroll.selectedMonth||''} onChange={e=>setPayroll(s=>({...s,selectedMonth:e.target.value,summary:null,meta:{}}))}>
-                    {payroll.months.map(m=>(
-                      <option key={m} value={m}>{new Date(m).toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</option>
-                    ))}
-                  </select>
-                )}
-                {PAYROLL_TABS.map(([id,label])=>(
-                  <button key={id} className="tab-btn active" disabled>{label}</button>
-                ))}
-              </>
-            )}
-            {showTabs && TABS.map(([id,label])=>(
-              <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
-            ))}
-          </nav>
         </header>
-
-        {activeDash==='product-research'
-          ? <iframe src="product-research.html" style={{flex:1,width:'100%',border:'none',display:'block',minHeight:0}} title="Product Research" />
-          : <main className="app-main">
-
-          {/* ── Home ── */}
-          {activeDash==='home' && (
-            <HomePage onNavigate={id => { setDash(id); setTab('overview'); }} />
-          )}
-
-          {/* ── Finance Adjustments ── */}
-          {activeDash==='finance' && (
-            fme.error ? <ErrorScreen msg={fme.error} /> :
-            <>
-              {activeTab==='overview' && <Overview rows={rawData} taxonomy={taxonomy} loading={fme.loading} />}
-              {activeTab==='gaps' && (
-                <div>
-                  {!fme.loading && isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
-                  <ProductGaps rows={cleanedData} taxonomy={taxonomy} loading={fme.loading} />
-                </div>
-              )}
-              {activeTab==='trend' && (
-                <div>
-                  {!fme.loading && isPartial && <div style={{maxWidth:'1440px',margin:'0 auto'}}><CoverageBanner rawCount={rawData.length} cleanedCount={cleanedData.length} /></div>}
-                  <TrendAnalysis rows={cleanedData} taxonomy={taxonomy} loading={fme.loading} />
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── ARR ── */}
-          {activeDash==='arr' && (
-            arr.error ? <ErrorScreen msg={arr.error} /> :
-            <ARRDashboard
-              arrMetrics={arr.arrMetrics}
-              arrSummary={arr.arrSummary}
-              arrFlagCount={arr.arrFlagCount}
-              loading={arr.loading}
-            />
-          )}
-
-          {/* ── Payroll Validation ── */}
-          {activeDash==='payroll' && (
-            payroll.error ? <ErrorScreen msg={payroll.error} /> :
-            <PayrollOverview summary={payroll.summary} meta={payroll.meta} loading={payroll.loading} />
-          )}
-
-          {/* ── Customer Health ── */}
-          {activeDash==='health' && (
-            health.error ? <ErrorScreen msg={health.error} /> :
-            <CustomerHealthDashboard summary={health.summary} meta={health.meta} loading={health.loading} />
-          )}
-
-        </main>
-        }
-      </div>
+        <section className="app-main">
+          <FinanceView rows={financeRows} />
+        </section>
+      </main>
     </div>
   );
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
