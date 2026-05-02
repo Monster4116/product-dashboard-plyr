@@ -218,7 +218,7 @@ const FinanceView = ({ rows }) => {
         <div className="hero-stat-block">
           <span className="status-pill live">Live</span>
           <div className="hero-stat-kicker">Data source</div>
-          <div className="hero-stat-value">{window.__PUBLIC_CONFIG__?.appEnv === 'local' ? 'Local mock' : 'Supabase live'}</div>
+          <div className="hero-stat-value">{FINANCE_ENV === 'local' ? 'Local mock' : 'Dashboard API'}</div>
           <div className="hero-stat-meta">{fmt.number(rows.length)} records loaded</div>
         </div>
       </section>
@@ -308,7 +308,8 @@ const App = () => {
 
         // Today this loads local mock data through the shared frontend service.
         // In the next backend phase, the same service function can switch to
-        // a real API request without scattering data access across the page.
+        // a real API request through the configured API boundary without
+        // scattering backend details across the page.
         const finance = await window.dashboardApi.getFinanceAdjustments();
         setFinanceRows(finance);
         writeFinanceCache(finance);
@@ -331,7 +332,7 @@ const App = () => {
         <header className="app-header">
           <div className="header-left">
             <div className="logo">Finance Adjustments</div>
-            <div className="header-sub">Dedicated dashboard page · Supabase-backed main dataset</div>
+            <div className="header-sub">Dedicated dashboard page · service-backed dataset</div>
           </div>
           <a className="header-link" href="index.html">Back to home</a>
         </header>
