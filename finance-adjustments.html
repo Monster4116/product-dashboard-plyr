@@ -27,7 +27,8 @@
 const { useEffect, useMemo, useRef, useState } = React;
 
 const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D'];
-const FINANCE_CACHE_KEY = 'dashboard.finance-adjustments.rows.v1';
+const FINANCE_ENV = window.__PUBLIC_CONFIG__?.appEnv ?? 'local';
+const FINANCE_CACHE_KEY = `dashboard.finance-adjustments.rows.v2.${FINANCE_ENV}`;
 
 const fmt = {
   currency: n => {
