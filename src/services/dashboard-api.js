@@ -52,7 +52,7 @@ export const getFinanceAdjustments = async () => {
     return mapList(financeAdjustmentsMockResponse.items, mapFinanceAdjustment);
   }
 
-  return requestList('/dashboard/finance-adjustments', mapFinanceAdjustment);
+  return requestList('/finance-adjustments', mapFinanceAdjustment);
 };
 
 export const getResearchData = async () => requestList('/dashboard/research', mapResearchItem);
