@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Adjustments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="dashboard-pages.js"></script>
+<script type="text/babel">
+const { useEffect, useMemo, useRef, useState } = React;
+
+const DASHBOARD_CONFIG = window.__DASHBOARD_CONFIG__ || {
+  supabaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWpjZ3NlbmpodGttaGlzcWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MzMzMjAsImV4cCI6MjA5MzIwOTMyMH0.yGhYmqI_I-tXT_wvkmaDTy_hCW5uD_4-FKEsmTNohBA'
+};
+
+const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D'];
+
+const fmt = {
+  currency: n => {
+    const v = Number(n) || 0;
+    const abs = Math.abs(v);
+    const sign = v < 0 ? '-' : '';
+    if (abs >= 1000000) return `${sign}$${(abs / 1000000).toFixed(2)}M`;
+    if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}K`;
+    return `${sign}$${abs.toFixed(0)}`;
+  },
+  number: n => new Intl.NumberFormat('en-US').format(Math.round(Number(n) || 0)),
+  pct: n => `${(Number(n) || 0).toFixed(1)}%`,
+};
+
+const parseMonth = value => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const monthKey = value => {
+  const d = parseMonth(value);
+  if (!d) return 'Unknown';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
+};
+
+const monthLabel = key => {
+  if (key === 'Unknown') return key;
+  const [year, month] = key.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month:'short', year:'2-digit' });
+};
+
+const db = DASHBOARD_CONFIG.supabaseUrl && DASHBOARD_CONFIG.supabaseAnonKey
+  ? supabase.createClient(DASHBOARD_CONFIG.supabaseUrl, DASHBOARD_CONFIG.supabaseAnonKey)
+  : null;
+
+const ChartCanvas = ({ config, height = 260 }) => {
+  const ref = useRef(null);
+  const chart = useRef(null);
+
+  useEffect(() => {
+    if (!ref.current || !config) return;
+    if (chart.current) chart.current.destroy();
+    chart.current = new Chart(ref.current, config);
+    return () => chart.current && chart.current.destroy();
+  }, [config]);
+
+  return <canvas ref={ref} style={{ height, maxHeight: height }} />;
+};
+
+const LoadingScreen = () => (
+  <div className="center-screen">
+    <div className="spinner" />
+    <p style={{ color:'var(--text-secondary)', fontSize:'0.8125rem' }}>Loading finance adjustments…</p>
+  </div>
+);
+
+const ErrorScreen = ({ message }) => (
+  <div className="center-screen">
+    <div className="err-title">Failed to load finance adjustments</div>
+    <div className="err-msg">{message}</div>
+    <div className="err-msg" style={{ marginTop: 8 }}>
+      This page expects read-only Supabase access through the public anon key and RLS-protected tables or views.
+    </div>
+  </div>
+);
+
+const KPICard = ({ label, value, sub, sign }) => (
+  <div className="kpi-card">
+    <div className="kpi-label">{label}</div>
+    <div className={`kpi-value${sign ? ` ${sign}` : ''}`}>{value}</div>
+    {sub && <div className="kpi-sub">{sub}</div>}
+  </div>
+);
+
+async function fetchAll(table, orderBy, pageSize = 1000) {
+  let allRows = [];
+  let from = 0;
+  let to = pageSize - 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = db
+      .from(table)
+      .select('*')
+      .range(from, to);
+
+    if (orderBy) {
+      query = query.order(orderBy, { ascending: false });
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`${table}: ${error.message}`);
+    }
+
+    const rows = data || [];
+    allRows = allRows.concat(rows);
+
+    hasMore = rows.length === pageSize;
+    from += pageSize;
+    to += pageSize;
+  }
+
+  return allRows;
+}
+
+const FinanceView = ({ rows }) => {
+  const [territory, setTerritory] = useState('');
+  const [aspect, setAspect] = useState('');
+
+  const territories = useMemo(() => [...new Set(rows.map(r => r.TERRITORY).filter(Boolean))].sort(), [rows]);
+  const aspects = useMemo(() => [...new Set(rows.map(r => r.PRIMARY_ASPECT).filter(Boolean))].sort(), [rows]);
+
+  const filtered = useMemo(() => rows.filter(r => {
+    if (territory && r.TERRITORY !== territory) return false;
+    if (aspect && r.PRIMARY_ASPECT !== aspect) return false;
+    return true;
+  }), [rows, territory, aspect]);
+
+  const stats = useMemo(() => {
+    const companies = new Set();
+    const employees = new Set();
+    const months = {};
+    const aspectMap = {};
+    let totalAbs = 0;
+    let net = 0;
+
+    filtered.forEach(r => {
+      const adj = Number(r.ADJUSTMENT_USD) || 0;
+      const abs = Number(r.ABS_ADJUSTMENT_USD) || Math.abs(adj);
+      totalAbs += abs;
+      net += adj;
+      if (r.CO_ID) companies.add(r.CO_ID);
+      if (r.EE_ID) employees.add(r.EE_ID);
+
+      const mk = monthKey(r.MONTH);
+      if (!months[mk]) months[mk] = { key: mk, records: 0, abs: 0, net: 0 };
+      months[mk].records += 1;
+      months[mk].abs += abs;
+      months[mk].net += adj;
+
+      const pa = r.PRIMARY_ASPECT || 'Unknown';
+      if (!aspectMap[pa]) aspectMap[pa] = { records: 0, abs: 0, net: 0 };
+      aspectMap[pa].records += 1;
+      aspectMap[pa].abs += abs;
+      aspectMap[pa].net += adj;
+    });
+
+    return {
+      totalAbs,
+      net,
+      companies: companies.size,
+      employees: employees.size,
+      months: Object.values(months).sort((a,b) => a.key.localeCompare(b.key)),
+      aspects: Object.entries(aspectMap).map(([name, value]) => ({ name, ...value })).sort((a,b) => b.abs - a.abs),
+    };
+  }, [filtered]);
+
+  const monthlyChart = useMemo(() => ({
+    type: 'bar',
+    data: {
+      labels: stats.months.map(m => monthLabel(m.key)),
+      datasets: [
+        { label: 'Records', data: stats.months.map(m => m.records), backgroundColor: '#5110DD30', borderColor: '#5110DD', borderWidth: 1.5, yAxisID: 'y' },
+        { label: 'Abs exposure', data: stats.months.map(m => m.abs), type: 'line', borderColor: '#F44336', backgroundColor: '#F4433610', borderWidth: 2, pointRadius: 3, fill: true, yAxisID: 'y1', tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color:'#49454F', font:{ family:'Poppins', size:11 } } } },
+      scales: {
+        x: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 } }, grid: { color:'#E9E9EA' } },
+        y: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 } }, grid: { color:'#E9E9EA' } },
+        y1: { position:'right', ticks: { color:'#49454F', callback: v => fmt.currency(v) }, grid: { display:false } }
+      }
+    }
+  }), [stats]);
+
+  const aspectChart = useMemo(() => ({
+    type: 'doughnut',
+    data: {
+      labels: stats.aspects.slice(0, 8).map(a => a.name),
+      datasets: [{ data: stats.aspects.slice(0, 8).map(a => a.records), backgroundColor: CHART_COLORS, borderWidth: 0 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position:'right', labels: { color:'#49454F', font:{ family:'Poppins', size:11 }, boxWidth: 12 } } }
+    }
+  }), [stats]);
+
+  return (
+    <div className="tab-content">
+      <section className="page-hero compact">
+        <div>
+          <div className="eyebrow">Live dashboard</div>
+          <h1 className="page-hero-title">Finance adjustments</h1>
+          <p className="page-hero-copy">
+            Review adjustment volume, exposure and operational concentration across territories, companies and primary aspects.
+          </p>
+        </div>
+        <div className="hero-stat-block">
+          <span className="status-pill live">Live</span>
+          <div className="hero-stat-kicker">Data source</div>
+          <div className="hero-stat-value">Supabase</div>
+          <div className="hero-stat-meta">{fmt.number(rows.length)} records loaded</div>
+        </div>
+      </section>
+
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Filters</h2>
+          <p className="section-sub">Narrow the live dataset by territory and primary aspect.</p>
+        </div>
+        <div style={{ display:'flex', gap: 10, flexWrap:'wrap' }}>
+          <select className="f-select" value={territory} onChange={e => setTerritory(e.target.value)}>
+            <option value="">All territories</option>
+            {territories.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="f-select" value={aspect} onChange={e => setAspect(e.target.value)}>
+            <option value="">All aspects</option>
+            {aspects.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="kpi-grid">
+        <KPICard label="Records" value={fmt.number(filtered.length)} sub="Filtered adjustments" />
+        <KPICard label="Absolute exposure" value={fmt.currency(stats.totalAbs)} sub="Total magnitude" />
+        <KPICard label="Net exposure" value={fmt.currency(stats.net)} sign={stats.net >= 0 ? 'pos' : 'neg'} />
+        <KPICard label="Avg adjustment" value={fmt.currency(filtered.length ? stats.totalAbs / filtered.length : 0)} />
+        <KPICard label="Companies" value={fmt.number(stats.companies)} />
+        <KPICard label="Employees" value={fmt.number(stats.employees)} />
+      </div>
+
+      <div className="charts-row">
+        <div className="chart-card" style={{ flex: 2 }}>
+          <div className="chart-title">Monthly records and exposure</div>
+          <ChartCanvas config={monthlyChart} />
+        </div>
+        <div className="chart-card" style={{ flex: 1 }}>
+          <div className="chart-title">Records by primary aspect</div>
+          <ChartCanvas config={aspectChart} />
+        </div>
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-title">Exposure by primary aspect</div>
+        <div className="table-wrap" style={{ marginBottom: 0 }}>
+          <table className="data-table">
+            <thead><tr><th>Primary aspect</th><th className="r">Records</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th></tr></thead>
+            <tbody>
+              {stats.aspects.map(a => <tr key={a.name}><td>{a.name}</td><td className="r">{fmt.number(a.records)}</td><td className="r">{fmt.currency(a.abs)}</td><td className={`r ${a.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(a.net)}</td><td className="r">{fmt.currency(a.records ? a.abs / a.records : 0)}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-title">Latest adjustment records</div>
+        <div className="table-wrap" style={{ marginBottom: 0 }}>
+          <table className="data-table">
+            <thead><tr><th>Month</th><th>CO ID</th><th>EE ID</th><th>Territory</th><th>Aspect</th><th className="r">Adjustment USD</th><th className="r">Confidence</th></tr></thead>
+            <tbody>
+              {filtered.slice(0, 50).map(r => <tr key={r.MATCH_KEY || `${r.MONTH}-${r.CO_ID}-${r.EE_ID}-${r.PRIMARY_ASPECT}`}><td>{r.MONTH}</td><td>{r.CO_ID}</td><td>{r.EE_ID}</td><td>{r.TERRITORY}</td><td>{r.PRIMARY_ASPECT || 'Unknown'}</td><td className={`r ${(Number(r.ADJUSTMENT_USD) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(r.ADJUSTMENT_USD)}</td><td className="r">{r.CONFIDENCE == null ? '---' : fmt.pct(Number(r.CONFIDENCE) * 100)}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const App = () => {
+  const [financeRows, setFinanceRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (!db) {
+          throw new Error('Supabase public configuration is missing. Set window.__DASHBOARD_CONFIG__ with supabaseUrl and supabaseAnonKey.');
+        }
+
+        const finance = await fetchAll('finance_adjustments_data', 'UPDATED_AT');
+        setFinanceRows(finance);
+      } catch (e) {
+        setError(e.message || String(e));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, []);
+
+  const sidebar = { __html: window.renderSidebar('finance-adjustments') };
+
+  return (
+    <div className="shell">
+      <div style={{ display:'contents' }} dangerouslySetInnerHTML={sidebar} />
+      <main className="app">
+        <header className="app-header">
+          <div className="header-left">
+            <div className="logo">Finance Adjustments</div>
+            <div className="header-sub">Dedicated dashboard page · Supabase-backed main dataset</div>
+          </div>
+          <a className="header-link" href="index.html">Back to home</a>
+        </header>
+        <section className="app-main">
+          {loading ? <LoadingScreen /> : error ? <ErrorScreen message={error} /> : <FinanceView rows={financeRows} />}
+        </section>
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
