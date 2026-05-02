@@ -1,6 +1,18 @@
+import { publicConfig } from '../config/public-config.js';
+
 // Shared fetch helper for future frontend API calls.
-// This helper intentionally does not add Authorization headers,
-// tokens, or credentials by default.
+// This helper intentionally does not add Authorization headers
+// or credentials by default.
+// If auth headers are needed later, they should be added here
+// in a controlled way after the real auth model is defined.
+
+const buildUrl = (path) => {
+  if (/^https?:\/\//.test(path)) {
+    return path;
+  }
+
+  return `${publicConfig.apiBaseUrl}${path}`;
+};
 
 const readResponseBody = async (response) => {
   const contentType = response.headers.get('content-type') || '';
@@ -17,8 +29,8 @@ const readResponseBody = async (response) => {
   return text ? { message: text } : null;
 };
 
-export const requestJson = async (url, options = {}) => {
-  const response = await fetch(url, {
+export const requestJson = async (path, options = {}) => {
+  const response = await fetch(buildUrl(path), {
     method: options.method || 'GET',
     headers: {
       Accept: 'application/json',
@@ -26,7 +38,7 @@ export const requestJson = async (url, options = {}) => {
       ...(options.headers || {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
-    credentials: options.credentials || 'same-origin',
+    ...(options.credentials ? { credentials: options.credentials } : {}),
     signal: options.signal,
   });
 
@@ -42,5 +54,7 @@ export const requestJson = async (url, options = {}) => {
 
   return payload;
 };
+
+export const getJson = async (path, options = {}) => requestJson(path, { ...options, method: 'GET' });
 
 export default requestJson;

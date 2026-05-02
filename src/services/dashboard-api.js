@@ -1,26 +1,27 @@
 import { publicConfig } from '../config/public-config.js';
-import { requestJson } from '../utils/http.js';
+import { getJson } from '../utils/http.js';
 import {
   mapDashboardSummary,
-  mapFinanceAdjustmentItem,
+  mapFinanceAdjustment,
   mapList,
-  mapResearchDataItem,
-  mapSupportTicketItem,
+  mapResearchItem,
+  mapSupportTicket,
 } from '../mappers/dashboard.mapper.js';
 import { financeAdjustmentsMockResponse } from './mock-data/dashboard.mock.js';
 
 // Frontend pages should call these service functions instead of
 // attempting to talk directly to a privileged database.
 // This file is the frontend boundary for future dashboard API paths.
+// Supabase details and future core Postgres details must stay behind
+// the API boundary and adapter layer, not inside frontend pages.
 // In local mode, finance adjustments are served from a mock module.
 // When the future API layer is ready, this local mock path should be
 // replaced by the API request path below.
 
-const buildApiUrl = (path) => `${publicConfig.apiBaseUrl}${path}`;
 const isLocalMockMode = publicConfig.appEnv === 'local';
 
 const requestList = async (path, mapper) => {
-  const payload = await requestJson(buildApiUrl(path));
+  const payload = await getJson(path);
 
   if (Array.isArray(payload)) {
     return mapList(payload, mapper);
@@ -34,7 +35,7 @@ const requestList = async (path, mapper) => {
 };
 
 export const getDashboardSummary = async () => {
-  const payload = await requestJson(buildApiUrl('/dashboard/summary'));
+  const payload = await getJson('/dashboard/summary');
 
   if (!payload || typeof payload !== 'object') {
     throw new Error('Unexpected response shape from /dashboard/summary.');
@@ -43,17 +44,18 @@ export const getDashboardSummary = async () => {
   return mapDashboardSummary(payload);
 };
 
-export const getSupportTickets = async () => requestList('/support/tickets', mapSupportTicketItem);
+export const getSupportTickets = async () =>
+  requestList('/dashboard/support-tickets', mapSupportTicket);
 
 export const getFinanceAdjustments = async () => {
   if (isLocalMockMode) {
-    return mapList(financeAdjustmentsMockResponse.items, mapFinanceAdjustmentItem);
+    return mapList(financeAdjustmentsMockResponse.items, mapFinanceAdjustment);
   }
 
-  return requestList('/finance-adjustments', mapFinanceAdjustmentItem);
+  return requestList('/dashboard/finance-adjustments', mapFinanceAdjustment);
 };
 
-export const getResearchData = async () => requestList('/research', mapResearchDataItem);
+export const getResearchData = async () => requestList('/dashboard/research', mapResearchItem);
 
 export default {
   getDashboardSummary,
