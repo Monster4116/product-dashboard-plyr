@@ -1,4 +1,4 @@
-// Raw database row -> mapper -> dashboard contract -> UI
+// raw database row -> adapter -> mapper -> dashboard contract -> UI
 //
 // These helpers are examples of the normalization boundary we want
 // in this repository. The UI should consume stable dashboard shapes
@@ -21,7 +21,7 @@ export const mapDashboardSummary = (rawItem = {}) => ({
   itemCount: toNumber(rawItem.itemCount, 0),
 });
 
-export const mapSupportTicketItem = (rawItem = {}) => ({
+export const mapSupportTicket = (rawItem = {}) => ({
   ticketId: toStringValue(rawItem.ticketId || rawItem.id, ''),
   category: toStringValue(rawItem.category, 'Unknown'),
   priority: toStringValue(rawItem.priority, 'Unknown'),
@@ -29,7 +29,7 @@ export const mapSupportTicketItem = (rawItem = {}) => ({
   requesterName: toStringValue(rawItem.requesterName, 'Unknown'),
 });
 
-export const mapFinanceAdjustmentItem = (rawItem = {}) => ({
+export const mapFinanceAdjustment = (rawItem = {}) => ({
   month: toStringValue(rawItem.month, ''),
   companyId: toStringValue(rawItem.companyId, ''),
   employeeId: toStringValue(rawItem.employeeId, ''),
@@ -43,7 +43,7 @@ export const mapFinanceAdjustmentItem = (rawItem = {}) => ({
   confidence: toNumber(rawItem.confidence, 0),
 });
 
-export const mapResearchDataItem = (rawItem = {}) => ({
+export const mapResearchItem = (rawItem = {}) => ({
   id: toStringValue(rawItem.id, ''),
   title: toStringValue(rawItem.title, 'Untitled'),
   category: toStringValue(rawItem.category, 'General'),
@@ -55,3 +55,8 @@ export const mapList = (items, mapper) => {
   if (!Array.isArray(items)) return [];
   return items.map((item) => mapper(item));
 };
+
+// Backward-compatible aliases for earlier scaffolding names.
+export const mapSupportTicketItem = mapSupportTicket;
+export const mapFinanceAdjustmentItem = mapFinanceAdjustment;
+export const mapResearchDataItem = mapResearchItem;
