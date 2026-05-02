@@ -15,6 +15,12 @@
 </head>
 <body>
 <div id="root"></div>
+<script>
+  window.__PUBLIC_CONFIG__ = {
+    appEnv: 'production',
+    apiBaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co/functions/v1',
+  };
+</script>
 <script src="dashboard-pages.js"></script>
 <script type="module" src="src/services/dashboard-api.browser.js"></script>
 <script type="text/babel">
@@ -211,7 +217,7 @@ const FinanceView = ({ rows }) => {
         <div className="hero-stat-block">
           <span className="status-pill live">Live</span>
           <div className="hero-stat-kicker">Data source</div>
-          <div className="hero-stat-value">Local mock</div>
+          <div className="hero-stat-value">{window.__PUBLIC_CONFIG__?.appEnv === 'local' ? 'Local mock' : 'Supabase live'}</div>
           <div className="hero-stat-meta">{fmt.number(rows.length)} records loaded</div>
         </div>
       </section>
