@@ -7,12 +7,17 @@ import {
   mapResearchDataItem,
   mapSupportTicketItem,
 } from '../mappers/dashboard.mapper.js';
+import { financeAdjustmentsMockResponse } from './mock-data/dashboard.mock.js';
 
 // Frontend pages should call these service functions instead of
 // attempting to talk directly to a privileged database.
 // This file is the frontend boundary for future dashboard API paths.
+// In local mode, finance adjustments are served from a mock module.
+// When the future API layer is ready, this local mock path should be
+// replaced by the API request path below.
 
 const buildApiUrl = (path) => `${publicConfig.apiBaseUrl}${path}`;
+const isLocalMockMode = publicConfig.appEnv === 'local';
 
 const requestList = async (path, mapper) => {
   const payload = await requestJson(buildApiUrl(path));
@@ -40,8 +45,13 @@ export const getDashboardSummary = async () => {
 
 export const getSupportTickets = async () => requestList('/support/tickets', mapSupportTicketItem);
 
-export const getFinanceAdjustments = async () =>
-  requestList('/finance-adjustments', mapFinanceAdjustmentItem);
+export const getFinanceAdjustments = async () => {
+  if (isLocalMockMode) {
+    return mapList(financeAdjustmentsMockResponse.items, mapFinanceAdjustmentItem);
+  }
+
+  return requestList('/finance-adjustments', mapFinanceAdjustmentItem);
+};
 
 export const getResearchData = async () => requestList('/research', mapResearchDataItem);
 

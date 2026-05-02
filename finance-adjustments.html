@@ -11,19 +11,14 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="root"></div>
 <script src="dashboard-pages.js"></script>
+<script type="module" src="src/services/dashboard-api.browser.js"></script>
 <script type="text/babel">
 const { useEffect, useMemo, useRef, useState } = React;
-
-const DASHBOARD_CONFIG = window.__DASHBOARD_CONFIG__ || {
-  supabaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co',
-  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWpjZ3NlbmpodGttaGlzcWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MzMzMjAsImV4cCI6MjA5MzIwOTMyMH0.yGhYmqI_I-tXT_wvkmaDTy_hCW5uD_4-FKEsmTNohBA'
-};
 
 const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D'];
 const FINANCE_CACHE_KEY = 'dashboard.finance-adjustments.rows.v1';
@@ -59,10 +54,6 @@ const monthLabel = key => {
   return new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month:'short', year:'2-digit' });
 };
 
-const db = DASHBOARD_CONFIG.supabaseUrl && DASHBOARD_CONFIG.supabaseAnonKey
-  ? supabase.createClient(DASHBOARD_CONFIG.supabaseUrl, DASHBOARD_CONFIG.supabaseAnonKey)
-  : null;
-
 const ChartCanvas = ({ config, height = 260 }) => {
   const ref = useRef(null);
   const chart = useRef(null);
@@ -89,7 +80,7 @@ const ErrorScreen = ({ message }) => (
     <div className="err-title">Failed to load finance adjustments</div>
     <div className="err-msg">{message}</div>
     <div className="err-msg" style={{ marginTop: 8 }}>
-      This page expects read-only Supabase access through the public anon key and RLS-protected tables or views.
+      This page now reads through the shared frontend service layer using local mock data until the future API layer is ready.
     </div>
   </div>
 );
@@ -101,39 +92,6 @@ const KPICard = ({ label, value, sub, sign }) => (
     {sub && <div className="kpi-sub">{sub}</div>}
   </div>
 );
-
-async function fetchAll(table, orderBy, pageSize = 1000) {
-  let allRows = [];
-  let from = 0;
-  let to = pageSize - 1;
-  let hasMore = true;
-
-  while (hasMore) {
-    let query = db
-      .from(table)
-      .select('*')
-      .range(from, to);
-
-    if (orderBy) {
-      query = query.order(orderBy, { ascending: false });
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(`${table}: ${error.message}`);
-    }
-
-    const rows = data || [];
-    allRows = allRows.concat(rows);
-
-    hasMore = rows.length === pageSize;
-    from += pageSize;
-    to += pageSize;
-  }
-
-  return allRows;
-}
 
 function readFinanceCache() {
   try {
@@ -158,12 +116,12 @@ const FinanceView = ({ rows }) => {
   const [territory, setTerritory] = useState('');
   const [aspect, setAspect] = useState('');
 
-  const territories = useMemo(() => [...new Set(rows.map(r => r.TERRITORY).filter(Boolean))].sort(), [rows]);
-  const aspects = useMemo(() => [...new Set(rows.map(r => r.PRIMARY_ASPECT).filter(Boolean))].sort(), [rows]);
+  const territories = useMemo(() => [...new Set(rows.map(r => r.territory).filter(Boolean))].sort(), [rows]);
+  const aspects = useMemo(() => [...new Set(rows.map(r => r.primaryAspect).filter(Boolean))].sort(), [rows]);
 
   const filtered = useMemo(() => rows.filter(r => {
-    if (territory && r.TERRITORY !== territory) return false;
-    if (aspect && r.PRIMARY_ASPECT !== aspect) return false;
+    if (territory && r.territory !== territory) return false;
+    if (aspect && r.primaryAspect !== aspect) return false;
     return true;
   }), [rows, territory, aspect]);
 
@@ -176,20 +134,20 @@ const FinanceView = ({ rows }) => {
     let net = 0;
 
     filtered.forEach(r => {
-      const adj = Number(r.ADJUSTMENT_USD) || 0;
-      const abs = Number(r.ABS_ADJUSTMENT_USD) || Math.abs(adj);
+      const adj = Number(r.adjustmentUsd) || 0;
+      const abs = Number(r.absoluteAdjustmentUsd) || Math.abs(adj);
       totalAbs += abs;
       net += adj;
-      if (r.CO_ID) companies.add(r.CO_ID);
-      if (r.EE_ID) employees.add(r.EE_ID);
+      if (r.companyId) companies.add(r.companyId);
+      if (r.employeeId) employees.add(r.employeeId);
 
-      const mk = monthKey(r.MONTH);
+      const mk = monthKey(r.month);
       if (!months[mk]) months[mk] = { key: mk, records: 0, abs: 0, net: 0 };
       months[mk].records += 1;
       months[mk].abs += abs;
       months[mk].net += adj;
 
-      const pa = r.PRIMARY_ASPECT || 'Unknown';
+      const pa = r.primaryAspect || 'Unknown';
       if (!aspectMap[pa]) aspectMap[pa] = { records: 0, abs: 0, net: 0 };
       aspectMap[pa].records += 1;
       aspectMap[pa].abs += abs;
@@ -253,7 +211,7 @@ const FinanceView = ({ rows }) => {
         <div className="hero-stat-block">
           <span className="status-pill live">Live</span>
           <div className="hero-stat-kicker">Data source</div>
-          <div className="hero-stat-value">Supabase</div>
+          <div className="hero-stat-value">Local mock</div>
           <div className="hero-stat-meta">{fmt.number(rows.length)} records loaded</div>
         </div>
       </section>
@@ -313,7 +271,7 @@ const FinanceView = ({ rows }) => {
           <table className="data-table">
             <thead><tr><th>Month</th><th>CO ID</th><th>EE ID</th><th>Territory</th><th>Aspect</th><th className="r">Adjustment USD</th><th className="r">Confidence</th></tr></thead>
             <tbody>
-              {filtered.slice(0, 50).map(r => <tr key={r.MATCH_KEY || `${r.MONTH}-${r.CO_ID}-${r.EE_ID}-${r.PRIMARY_ASPECT}`}><td>{r.MONTH}</td><td>{r.CO_ID}</td><td>{r.EE_ID}</td><td>{r.TERRITORY}</td><td>{r.PRIMARY_ASPECT || 'Unknown'}</td><td className={`r ${(Number(r.ADJUSTMENT_USD) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(r.ADJUSTMENT_USD)}</td><td className="r">{r.CONFIDENCE == null ? '---' : fmt.pct(Number(r.CONFIDENCE) * 100)}</td></tr>)}
+              {filtered.slice(0, 50).map(r => <tr key={`${r.month}-${r.companyId}-${r.employeeId}-${r.primaryAspect}`}><td>{r.month}</td><td>{r.companyId}</td><td>{r.employeeId}</td><td>{r.territory}</td><td>{r.primaryAspect || 'Unknown'}</td><td className={`r ${(Number(r.adjustmentUsd) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(r.adjustmentUsd)}</td><td className="r">{r.confidence == null ? '---' : fmt.pct(Number(r.confidence) * 100)}</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -337,11 +295,14 @@ const App = () => {
           return;
         }
 
-        if (!db) {
-          throw new Error('Supabase public configuration is missing. Set window.__DASHBOARD_CONFIG__ with supabaseUrl and supabaseAnonKey.');
+        if (!window.dashboardApi || typeof window.dashboardApi.getFinanceAdjustments !== 'function') {
+          throw new Error('The shared dashboard service is not available in the browser yet.');
         }
 
-        const finance = await fetchAll('finance_adjustments_data', 'UPDATED_AT');
+        // Today this loads local mock data through the shared frontend service.
+        // In the next backend phase, the same service function can switch to
+        // a real API request without scattering data access across the page.
+        const finance = await window.dashboardApi.getFinanceAdjustments();
         setFinanceRows(finance);
         writeFinanceCache(finance);
       } catch (e) {
