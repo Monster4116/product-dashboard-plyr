@@ -16,9 +16,9 @@
     <header class="app-header">
       <div class="header-left">
         <div class="logo">Product Dashboard</div>
-        <div class="header-sub">Home page for the dashboard suite and future page structure</div>
+        <div class="header-sub">Home page for the live dashboard pages</div>
       </div>
-      <div class="header-link static">Shared shell active</div>
+      <a class="header-link" href="finance-adjustments.html">Open finance dashboard</a>
     </header>
     <section class="app-main">
       <div class="tab-content">
@@ -27,7 +27,7 @@
             <div class="eyebrow">Dashboard suite</div>
             <h1 class="page-hero-title">Available dashboards</h1>
             <p class="page-hero-copy">
-              This home page is the starting point for the dashboard. Each dashboard page will live in its own file, reuse the same shell, and follow the same styling and navigation rules.
+              The dashboard now has a shared shell with separate page files. Right now the live data footprint is intentionally narrow: one finance dashboard powered by Supabase.
             </p>
           </div>
           <div class="hero-stat-block" id="hero-stats"></div>
@@ -35,12 +35,12 @@
 
         <section class="info-strip">
           <div class="info-strip-item">
-            <span class="info-strip-label">Current live data</span>
+            <span class="info-strip-label">Current live dashboard</span>
             <span class="info-strip-value">Finance adjustments in Supabase</span>
           </div>
           <div class="info-strip-item">
             <span class="info-strip-label">Architecture</span>
-            <span class="info-strip-value">One file per page with a shared shell</span>
+            <span class="info-strip-value">Separate pages with a shared dashboard shell</span>
           </div>
           <div class="info-strip-item">
             <span class="info-strip-label">Next focus</span>
@@ -50,16 +50,16 @@
 
         <section class="section-header">
           <div>
-            <h2 class="section-title">Dashboard pages</h2>
-            <p class="section-sub">Live and planned pages in the dashboard suite.</p>
+            <h2 class="section-title">Live dashboard</h2>
+            <p class="section-sub">Only pages backed by live data are listed here.</p>
           </div>
         </section>
 
-        <section class="dashboard-card-grid" id="dashboard-card-grid"></section>
+        <section class="dashboard-card-grid single-card" id="dashboard-card-grid"></section>
 
         <section class="home-footer-note">
           <span>Playroll Internal Analytics</span>
-          <span>Static dashboard shell with page-level ownership</span>
+          <span>Finance adjustments is the current live dashboard</span>
         </section>
       </div>
     </section>
@@ -74,27 +74,31 @@
   document.getElementById('hero-stats').innerHTML = `
     <span class="status-pill live">${stats.liveDashboards} of ${stats.totalDashboards} live</span>
     <div class="hero-stat-kicker">Current structure</div>
-    <div class="hero-stat-value">${stats.totalDashboards} dashboard pages</div>
-    <div class="hero-stat-meta">Each page can now live in its own HTML file</div>
+    <div class="hero-stat-value">${stats.totalDashboards} live page</div>
+    <div class="hero-stat-meta">Home plus one dedicated finance dashboard page</div>
   `;
 
   const cards = window.DASHBOARD_PAGES
-    .filter(page => page.navGroup === 'Dashboards')
+    .filter(page => page.id === 'finance-adjustments')
     .map(page => {
-      const statusLabel = page.status === 'live' ? 'Live' : 'Coming soon';
-      const action = page.status === 'live'
-        ? `<a class="dashboard-card-link" href="${page.href}">Open dashboard</a>`
-        : `<span class="dashboard-card-link muted">Planned page</span>`;
-
       return `
         <article class="dashboard-card ${page.accentClass}">
           <div class="dashboard-card-top">
             <div class="dashboard-card-icon">${page.icon}</div>
-            <span class="status-pill ${page.status === 'live' ? 'live' : 'coming-soon'}">${statusLabel}</span>
+            <span class="status-pill live">Live</span>
           </div>
           <h3 class="dashboard-card-title">${page.cardTitle}</h3>
           <p class="dashboard-card-copy">${page.description}</p>
-          ${action}
+          <div class="dashboard-card-meta">
+            <span>Data source: Supabase</span>
+            <span>Dataset: Finance adjustments</span>
+          </div>
+          <ul class="dashboard-highlight-list">
+            <li>Monthly volume and exposure trend</li>
+            <li>Primary aspect concentration</li>
+            <li>Latest adjustment records with filtering</li>
+          </ul>
+          <a class="dashboard-card-link" href="${page.href}">Open dashboard</a>
         </article>
       `;
     })

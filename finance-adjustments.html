@@ -26,6 +26,7 @@ const DASHBOARD_CONFIG = window.__DASHBOARD_CONFIG__ || {
 };
 
 const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D'];
+const FINANCE_CACHE_KEY = 'dashboard.finance-adjustments.rows.v1';
 
 const fmt = {
   currency: n => {
@@ -132,6 +133,25 @@ async function fetchAll(table, orderBy, pageSize = 1000) {
   }
 
   return allRows;
+}
+
+function readFinanceCache() {
+  try {
+    const raw = sessionStorage.getItem(FINANCE_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeFinanceCache(rows) {
+  try {
+    sessionStorage.setItem(FINANCE_CACHE_KEY, JSON.stringify(rows));
+  } catch (_) {
+    // Ignore storage write failures; the page can still work from live fetches.
+  }
 }
 
 const FinanceView = ({ rows }) => {
@@ -303,19 +323,27 @@ const FinanceView = ({ rows }) => {
 };
 
 const App = () => {
-  const [financeRows, setFinanceRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [financeRows, setFinanceRows] = useState(() => readFinanceCache());
+  const [loading, setLoading] = useState(() => readFinanceCache().length === 0);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
       try {
+        const cachedRows = readFinanceCache();
+        if (cachedRows.length) {
+          setFinanceRows(cachedRows);
+          setLoading(false);
+          return;
+        }
+
         if (!db) {
           throw new Error('Supabase public configuration is missing. Set window.__DASHBOARD_CONFIG__ with supabaseUrl and supabaseAnonKey.');
         }
 
         const finance = await fetchAll('finance_adjustments_data', 'UPDATED_AT');
         setFinanceRows(finance);
+        writeFinanceCache(finance);
       } catch (e) {
         setError(e.message || String(e));
       } finally {
