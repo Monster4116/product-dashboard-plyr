@@ -74,7 +74,7 @@ window.renderSidebar = function renderSidebar(activePageId) {
   return `
     <aside class="sidebar open">
       <div class="sidebar-logo-row">
-        <div class="sidebar-wordmark">Playroll</div>
+        <div class="sidebar-wordmark">Product One</div>
       </div>
       <div class="sidebar-nav-stack">
         ${navSections}
