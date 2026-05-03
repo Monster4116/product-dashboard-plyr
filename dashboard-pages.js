@@ -12,6 +12,18 @@ window.DASHBOARD_PAGES = [
     description: 'See the available dashboards, what data each page contains, and navigate into the live finance dashboard.'
   },
   {
+    id: 'product-news',
+    label: 'Product News',
+    title: 'Product News',
+    href: 'product-news.html',
+    navGroup: 'Pages',
+    status: 'live',
+    accentClass: 'accent-secondary',
+    icon: 'PN',
+    cardTitle: 'Product news',
+    description: 'Read the latest product, competitor, regulatory and AI signals in one searchable research feed with quick links back to the source.'
+  },
+  {
     id: 'finance-adjustments',
     label: 'Finance Adjustments',
     title: 'Finance Adjustments',
