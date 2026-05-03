@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Product Dashboard Home</title>
+<title>Product One | Home</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,22 +15,98 @@
   <main class="app">
     <header class="app-header">
       <div class="header-left">
-        <div class="logo">Product Dashboard</div>
+        <div class="logo">Product One</div>
         <div class="header-sub">Home page for the live dashboard pages</div>
       </div>
       <a class="header-link" href="company-health.html">Open company health dashboard</a>
     </header>
     <section class="app-main">
       <div class="tab-content">
-        <section class="page-hero">
-          <div>
+        <section class="page-hero home-banner">
+          <div class="home-banner-copy">
             <div class="eyebrow">Dashboard suite</div>
             <h1 class="page-hero-title">Available dashboards</h1>
             <p class="page-hero-copy">
               The dashboard now has a shared shell with separate page files. Right now the live data footprint is intentionally narrow: finance adjustments and company health, both delivered through the shared dashboard structure.
             </p>
+            <div class="home-banner-tag-row">
+              <span class="home-banner-tag">Insight-driven</span>
+              <span class="home-banner-tag">Tech-forward</span>
+              <span class="home-banner-tag">Built to scale</span>
+            </div>
+            <div class="home-banner-stats" id="hero-stats"></div>
           </div>
-          <div class="hero-stat-block" id="hero-stats"></div>
+          <div class="home-banner-scene" aria-hidden="true">
+            <div class="banner-grid"></div>
+            <div class="banner-glow glow-a"></div>
+            <div class="banner-glow glow-b"></div>
+
+            <div class="banner-card banner-card-primary">
+              <div class="banner-card-header">
+                <span class="banner-card-label">Launch pulse</span>
+                <span class="banner-card-pill">Boost</span>
+              </div>
+              <div class="banner-card-title">Innovation in motion</div>
+              <div class="banner-bars">
+                <span class="banner-bar bar-1"></span>
+                <span class="banner-bar bar-2"></span>
+                <span class="banner-bar bar-3"></span>
+                <span class="banner-bar bar-4"></span>
+                <span class="banner-bar bar-5"></span>
+                <span class="banner-bar bar-6"></span>
+              </div>
+              <p class="banner-card-copy">Big ideas, fast experimentation and high-clarity product thinking, all framed in one bold dashboard experience.</p>
+            </div>
+
+            <div class="banner-floating banner-floating-rocket">
+              <div class="banner-floating-icon">
+                <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                  <path d="M38 10C47 12 53 18 54 27C48 34 42 39 33 42C29 33 31 22 38 10Z" fill="currentColor" opacity="0.95"/>
+                  <path d="M24 37L18 45L27 43L24 37Z" fill="currentColor" opacity="0.7"/>
+                  <path d="M32 45L40 53L39 43L32 45Z" fill="currentColor" opacity="0.65"/>
+                  <circle cx="42" cy="22" r="4.5" fill="#2D1A67"/>
+                  <path d="M18 45C17 50 13 53 9 55C11 51 14 47 18 45Z" fill="#FDB26B"/>
+                </svg>
+              </div>
+              <div class="banner-floating-copy">
+                <strong>Fast lift-off</strong>
+                <span>Ship new insight experiences quickly.</span>
+              </div>
+            </div>
+
+            <div class="banner-floating banner-floating-idea">
+              <div class="banner-floating-icon idea">
+                <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                  <path d="M32 12C21.5 12 14 19.5 14 29C14 35 17.1 40.1 22.3 43.5C24.2 44.8 25.5 47 25.7 49.2H38.3C38.5 47 39.8 44.8 41.7 43.5C46.9 40.1 50 35 50 29C50 19.5 42.5 12 32 12Z" fill="currentColor" opacity="0.9"/>
+                  <path d="M26 52H38" stroke="#2D1A67" stroke-width="3.5" stroke-linecap="round"/>
+                  <path d="M28 57H36" stroke="#2D1A67" stroke-width="3.5" stroke-linecap="round"/>
+                  <path d="M19 14L16 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                  <path d="M45 14L48 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                  <path d="M12 28H7" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                  <path d="M57 28H52" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="banner-floating-copy">
+                <strong>Idea engine</strong>
+                <span>Concepts and signals shaped into action.</span>
+              </div>
+            </div>
+
+            <div class="banner-tech-panel">
+              <div class="banner-tech-chip">
+                <span>AI workflows</span>
+                <strong>Ready</strong>
+              </div>
+              <div class="banner-tech-chip">
+                <span>Signal depth</span>
+                <strong>High</strong>
+              </div>
+              <div class="banner-tech-chip accent">
+                <span>Build mode</span>
+                <strong>Live</strong>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="info-strip">
@@ -58,7 +134,7 @@
         <section class="dashboard-card-grid" id="dashboard-card-grid"></section>
 
         <section class="home-footer-note">
-          <span>Playroll Internal Analytics</span>
+          <span>Product One</span>
           <span>Finance adjustments and company health are the current dashboard pages</span>
         </section>
       </div>
@@ -72,10 +148,21 @@
 
   const stats = window.getDashboardStats();
   document.getElementById('hero-stats').innerHTML = `
-    <span class="status-pill live">${stats.liveDashboards} of ${stats.totalDashboards} live</span>
-    <div class="hero-stat-kicker">Current structure</div>
-    <div class="hero-stat-value">${stats.totalDashboards} live pages</div>
-    <div class="hero-stat-meta">Home plus dedicated dashboard pages for finance and company health</div>
+    <div class="home-banner-stat">
+      <span class="home-banner-stat-label">Live dashboards</span>
+      <strong class="home-banner-stat-value">${stats.liveDashboards}</strong>
+      <span class="home-banner-stat-meta">${stats.liveDashboards} of ${stats.totalDashboards} active</span>
+    </div>
+    <div class="home-banner-stat">
+      <span class="home-banner-stat-label">Current structure</span>
+      <strong class="home-banner-stat-value">${stats.totalDashboards}</strong>
+      <span class="home-banner-stat-meta">Dedicated dashboard pages</span>
+    </div>
+    <div class="home-banner-stat">
+      <span class="home-banner-stat-label">Experience</span>
+      <strong class="home-banner-stat-value">Unified</strong>
+      <span class="home-banner-stat-meta">Shared shell and data pathways</span>
+    </div>
   `;
 
   const cards = window.DASHBOARD_PAGES
