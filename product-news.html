@@ -60,6 +60,32 @@ const toDateValue = value => {
   return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
 };
 
+const useDashboardTheme = () => {
+  const [theme, setTheme] = useState(() => window.getDashboardTheme ? window.getDashboardTheme() : 'light');
+
+  useEffect(() => {
+    const handleThemeChange = event => {
+      setTheme(event.detail?.theme || (window.getDashboardTheme ? window.getDashboardTheme() : 'light'));
+    };
+
+    window.addEventListener('dashboard-theme-change', handleThemeChange);
+    return () => window.removeEventListener('dashboard-theme-change', handleThemeChange);
+  }, []);
+
+  return theme;
+};
+
+const getChartPalette = () => (
+  window.getDashboardThemePalette
+    ? window.getDashboardThemePalette()
+    : {
+        chartText: '#49454F',
+        chartGrid: '#E9E9EA',
+        chartBar: '#5110DDAA',
+        chartBarBorder: '#5110DD',
+      }
+);
+
 function readProductNewsCache() {
   try {
     const raw = sessionStorage.getItem(PRODUCT_NEWS_CACHE_KEY);
@@ -130,33 +156,168 @@ const CategoryBadge = ({ category }) => {
   return <span className={`category-badge ${meta.tone}`}>{meta.label}</span>;
 };
 
-const NewsCard = ({ row }) => (
-  <article className="news-card">
-    <div className="news-card-top">
-      <CategoryBadge category={row.category} />
+const NewsGraphic = ({ category }) => {
+  const meta = getCategoryMeta(category);
+  const toneClass = meta.tone || 'general';
+
+  const iconByCategory = {
+    regulatory: (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 3L18.5 5.7V11.8C18.5 16.1 15.7 19.9 12 21C8.3 19.9 5.5 16.1 5.5 11.8V5.7L12 3Z" fill="currentColor" opacity="0.18"/>
+        <path d="M12 4.8L17 6.8V11.6C17 14.8 15.1 17.5 12 18.5C8.9 17.5 7 14.8 7 11.6V6.8L12 4.8Z" stroke="currentColor" strokeWidth="1.8"/>
+        <path d="M9.7 11.9L11.2 13.4L14.6 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+    competitor: (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 16L9 12L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M14.5 9H18V12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="6.5" cy="16.5" r="2" fill="currentColor" opacity="0.22"/>
+      </svg>
+    ),
+    ai: (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 4L13.8 9.2L19 11L13.8 12.8L12 18L10.2 12.8L5 11L10.2 9.2L12 4Z" fill="currentColor" opacity="0.18"/>
+        <path d="M12 4L13.8 9.2L19 11L13.8 12.8L12 18L10.2 12.8L5 11L10.2 9.2L12 4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+      </svg>
+    ),
+    pm: (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+        <path d="M8 9H16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M8 13H12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M15 13H16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      </svg>
+    ),
+    general: (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8"/>
+        <path d="M12 8V12L14.8 14.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  };
+
+  return (
+    <span className={`story-icon ${toneClass}`} aria-hidden="true">
+      {iconByCategory[toneClass] || iconByCategory.general}
+    </span>
+  );
+};
+
+const StorySpotlightCard = ({ row }) => (
+  <article className="story-spotlight-card">
+    <div className="story-spotlight-head">
+      <div style={{ display:'flex', gap: 12, alignItems:'flex-start' }}>
+        <NewsGraphic category={row.category} />
+        <div>
+          <CategoryBadge category={row.category} />
+          <h3 className="story-spotlight-title" style={{ marginTop: 10 }}>{row.headline}</h3>
+        </div>
+      </div>
       <span className="news-pill">{fmt.date(getRowDate(row))}</span>
     </div>
 
-    <div>
-      <h3 className="news-card-title">{row.headline}</h3>
-      <div className="news-card-meta" style={{ marginTop: 8 }}>
-        {row.actor && <span className="news-pill">{row.actor}</span>}
-        {row.descriptor && <span className="news-pill">{row.descriptor}</span>}
-        {row.sourceDomain && <span className="news-pill">{row.sourceDomain}</span>}
-      </div>
+    <div className="news-card-meta">
+      {row.actor && <span className="news-pill">{row.actor}</span>}
+      {row.descriptor && <span className="news-pill">{row.descriptor}</span>}
+      {row.sourceDomain && <span className="news-pill">{row.sourceDomain}</span>}
     </div>
 
-    <p className="news-card-summary">{row.summary || 'No summary available for this item yet.'}</p>
-    {row.insight && <div className="news-card-insight">{row.insight}</div>}
+    <p className="story-spotlight-summary">{row.summary || 'No summary available for this item yet.'}</p>
 
-    <div className="news-card-footer">
+    <div className="story-spotlight-footer">
       <span className="news-pill">{row.runType || 'daily'}</span>
-      <a className="news-link" href={row.sourceUrl} target="_blank" rel="noreferrer noopener">Open source</a>
+      {row.sourceUrl ? (
+        <a className="news-link" href={row.sourceUrl} target="_blank" rel="noreferrer noopener">Open source</a>
+      ) : (
+        <span className="news-pill">No source link</span>
+      )}
     </div>
   </article>
 );
 
+const NewsFeedItem = ({ row }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const detailCards = [
+    row.actorType && { label: 'Actor type', value: row.actorType },
+    row.descriptor && { label: 'Signal tag', value: row.descriptor },
+    row.sourceDomain && { label: 'Source domain', value: row.sourceDomain },
+    row.researchedAt && { label: 'Researched at', value: fmt.date(row.researchedAt) },
+    row.runType && { label: 'Run type', value: row.runType },
+    row.sentiment && { label: 'Sentiment', value: row.sentiment },
+    row.region && { label: 'Region', value: row.region },
+    row.eventType && { label: 'Event type', value: row.eventType },
+    row.stage && { label: 'Funding stage', value: row.stage },
+    row.amount && { label: 'Amount', value: row.amount },
+    row.investors && { label: 'Investors', value: row.investors },
+  ].filter(Boolean);
+
+  const hasExtraDetail = Boolean(row.insight) || detailCards.length > 0;
+
+  return (
+    <article className="feed-item">
+      <div className="feed-item-head">
+        <div className="feed-item-main">
+          <NewsGraphic category={row.category} />
+          <div className="feed-item-body">
+            <div className="feed-item-topline">
+              <h3 className="feed-item-title">{row.headline}</h3>
+            </div>
+
+            <div className="feed-item-meta">
+              <CategoryBadge category={row.category} />
+              {row.actor && <span className="news-pill">{row.actor}</span>}
+              {row.descriptor && <span className="news-pill">{row.descriptor}</span>}
+              {row.sourceDomain && <span className="news-pill">{row.sourceDomain}</span>}
+            </div>
+
+            <p className="feed-item-summary">{row.summary || 'No summary available for this item yet.'}</p>
+          </div>
+        </div>
+
+        <div className="feed-item-side">
+          <span className="news-pill">{fmt.date(getRowDate(row))}</span>
+          <div className="feed-item-actions">
+            {hasExtraDetail && (
+              <button className="feed-item-toggle" type="button" onClick={() => setExpanded(value => !value)}>
+                {expanded ? 'Hide details' : 'More detail'}
+              </button>
+            )}
+            {row.sourceUrl ? (
+              <a className="feed-item-link" href={row.sourceUrl} target="_blank" rel="noreferrer noopener">Open source</a>
+            ) : (
+              <span className="news-pill">No source link</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {expanded && hasExtraDetail && (
+        <div className="feed-item-details">
+          {detailCards.map(card => (
+            <div key={`${row.id}-${card.label}`} className="feed-detail-card">
+              <span className="feed-detail-label">{card.label}</span>
+              <div className="feed-detail-value">{card.value}</div>
+            </div>
+          ))}
+
+          {row.insight && (
+            <div className="feed-detail-card feed-item-insight">
+              <span className="feed-detail-label">Why it matters</span>
+              <div className="feed-detail-value">{row.insight}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  );
+};
+
 const ProductNewsView = ({ rows }) => {
+  const theme = useDashboardTheme();
+  const chartPalette = useMemo(() => getChartPalette(), [theme]);
+  const [activeTab, setActiveTab] = useState('overview');
   const [category, setCategory] = useState('');
   const [actor, setActor] = useState('');
   const [query, setQuery] = useState('');
@@ -276,11 +437,11 @@ const ProductNewsView = ({ rows }) => {
       plugins: {
         legend: {
           position: 'right',
-          labels: { color:'#49454F', font:{ family:'Poppins', size:11 }, boxWidth: 12 },
+          labels: { color: chartPalette.chartText, font:{ family:'Poppins', size:11 }, boxWidth: 12 },
         },
       },
     },
-  }), [stats]);
+  }), [stats, chartPalette]);
 
   const timelineChart = useMemo(() => ({
     type: 'bar',
@@ -289,8 +450,8 @@ const ProductNewsView = ({ rows }) => {
       datasets: [{
         label: 'Items',
         data: stats.recentDates.map(item => item.count),
-        backgroundColor: '#5110DDAA',
-        borderColor: '#5110DD',
+        backgroundColor: chartPalette.chartBar,
+        borderColor: chartPalette.chartBarBorder,
         borderWidth: 1.5,
         borderRadius: 8,
       }],
@@ -302,13 +463,14 @@ const ProductNewsView = ({ rows }) => {
         legend: { display: false },
       },
       scales: {
-        x: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 } }, grid: { display: false } },
-        y: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 }, precision: 0 }, grid: { color:'#E9E9EA' } },
+        x: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 } }, grid: { display: false } },
+        y: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 }, precision: 0 }, grid: { color: chartPalette.chartGrid } },
       },
     },
-  }), [stats]);
+  }), [stats, chartPalette]);
 
-  const latestCards = useMemo(() => filtered.slice(0, 8), [filtered]);
+  const topStories = useMemo(() => filtered.slice(0, 3), [filtered]);
+  const feedRows = useMemo(() => filtered, [filtered]);
 
   return (
     <div className="tab-content">
@@ -343,6 +505,17 @@ const ProductNewsView = ({ rows }) => {
         </div>
       </section>
 
+      <div className="product-news-tabs">
+        <div>
+          <h2 className="section-title">Product news views</h2>
+          <p className="product-news-tabs-copy">Start with a simple overview for quick pattern reading, then switch into the full feed when you want to scan individual stories in detail.</p>
+        </div>
+        <div className="tab-nav" role="tablist" aria-label="Product news views">
+          <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('overview')}>Overview</button>
+          <button className={`tab-btn ${activeTab === 'feed' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('feed')}>Newsfeed</button>
+        </div>
+      </div>
+
       <div className="section-header">
         <div>
           <h2 className="section-title">Filters</h2>
@@ -374,103 +547,60 @@ const ProductNewsView = ({ rows }) => {
         <KPICard label="Actors" value={fmt.number(stats.actorCount)} />
         <KPICard label="Sources" value={fmt.number(stats.sourceCount)} />
         <KPICard label="Latest item date" value={fmt.date(stats.latestDate)} />
-        <KPICard label="Cards shown" value={fmt.number(latestCards.length)} sub="Latest filtered items" />
+        <KPICard label="Top stories" value={fmt.number(topStories.length)} sub="Featured in the overview" />
       </div>
 
-      <div className="charts-row">
-        <div className="chart-card" style={{ flex: 1 }}>
-          <div className="chart-title">Items by category</div>
-          {stats.topCategories.length ? <ChartCanvas config={categoryChart} /> : <div className="no-data">No category data for the current filters.</div>}
-        </div>
-        <div className="chart-card" style={{ flex: 2 }}>
-          <div className="chart-title">Recent item cadence</div>
-          {stats.recentDates.length ? <ChartCanvas config={timelineChart} /> : <div className="no-data">No dated items available for the current filters.</div>}
-        </div>
-      </div>
-
-      <div className="charts-row">
-        <div className="chart-card" style={{ flex: 1.2 }}>
-          <div className="chart-title">Top actors in the current view</div>
-          {stats.topActors.length ? (
-            <div className="compact-stat-list">
-              {stats.topActors.map(item => (
-                <div key={item.name} className="compact-stat">
-                  <span className="compact-stat-label">{item.name}</span>
-                  <span className="compact-stat-value">{fmt.number(item.count)} items</span>
-                  <span className="compact-stat-meta">Appears in the current filtered feed</span>
-                </div>
-              ))}
+      {activeTab === 'overview' ? (
+        <>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Items by category</div>
+              {stats.topCategories.length ? <ChartCanvas config={categoryChart} /> : <div className="no-data">No category data for the current filters.</div>}
             </div>
-          ) : <div className="empty-inline">No actor names found in the current filters.</div>}
-        </div>
-        <div className="chart-card secondary-section" style={{ flex: 1 }}>
-          <div className="chart-title">Most common source domains</div>
-          {stats.sourceLeaders.length ? (
-            <div className="compact-stat-list">
-              {stats.sourceLeaders.map(item => (
-                <div key={item.name} className="compact-stat">
-                  <span className="compact-stat-label">{item.name}</span>
-                  <span className="compact-stat-value">{fmt.number(item.count)} links</span>
-                </div>
-              ))}
+            <div className="chart-card" style={{ flex: 2 }}>
+              <div className="chart-title">Recent item cadence</div>
+              {stats.recentDates.length ? <ChartCanvas config={timelineChart} /> : <div className="no-data">No dated items available for the current filters.</div>}
             </div>
-          ) : <div className="empty-inline">No source domains available for the current filters.</div>}
-        </div>
-      </div>
+          </div>
 
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Latest feed items</h2>
-          <p className="section-sub">Quick-scan cards for the newest filtered stories, with source links ready for deeper follow-up.</p>
-        </div>
-      </div>
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Top stories</h2>
+              <p className="section-sub">Three fast-read stories from the current filtered view, ready for source follow-up.</p>
+            </div>
+          </div>
 
-      {latestCards.length ? (
-        <section className="news-card-grid">
-          {latestCards.map(row => <NewsCard key={row.id} row={row} />)}
-        </section>
+          {topStories.length ? (
+            <section className="story-spotlight-grid">
+              {topStories.map(row => <StorySpotlightCard key={row.id} row={row} />)}
+            </section>
+          ) : (
+            <div className="chart-card">
+              <div className="no-data">No product news items match the current filters.</div>
+            </div>
+          )}
+        </>
       ) : (
-        <div className="chart-card">
-          <div className="no-data">No product news items match the current filters.</div>
-        </div>
-      )}
+        <>
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Newsfeed</h2>
+              <p className="section-sub">A readable vertical feed with quick tags, visible summaries and optional deeper context when you want it.</p>
+            </div>
+            <span className="header-link static">{fmt.number(feedRows.length)} stories in view</span>
+          </div>
 
-      <div className="chart-card secondary-section">
-        <div className="chart-title">Full research feed</div>
-        <div className="table-wrap" style={{ marginBottom: 0 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Headline</th>
-                <th>Category</th>
-                <th>Actor</th>
-                <th>Date</th>
-                <th>Run type</th>
-                <th>Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(row => (
-                <tr key={row.id}>
-                  <td className="news-table-headline">
-                    <strong>{row.headline}</strong>
-                    <span>{row.summary || row.insight || 'No preview available.'}</span>
-                  </td>
-                  <td><CategoryBadge category={row.category} /></td>
-                  <td>{row.actor || '---'}</td>
-                  <td>{fmt.date(getRowDate(row))}</td>
-                  <td>{row.runType || 'daily'}</td>
-                  <td>
-                    <a className="table-source-link" href={row.sourceUrl} target="_blank" rel="noreferrer noopener">
-                      {row.sourceDomain || 'Open source'}
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          {feedRows.length ? (
+            <section className="feed-list">
+              {feedRows.map(row => <NewsFeedItem key={row.id} row={row} />)}
+            </section>
+          ) : (
+            <div className="chart-card">
+              <div className="no-data">No product news items match the current filters.</div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

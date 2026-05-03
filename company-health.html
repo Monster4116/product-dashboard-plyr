@@ -62,6 +62,29 @@ const statusClass = value => {
   return '';
 };
 
+const useDashboardTheme = () => {
+  const [theme, setTheme] = useState(() => window.getDashboardTheme ? window.getDashboardTheme() : 'light');
+
+  useEffect(() => {
+    const handleThemeChange = event => {
+      setTheme(event.detail?.theme || (window.getDashboardTheme ? window.getDashboardTheme() : 'light'));
+    };
+
+    window.addEventListener('dashboard-theme-change', handleThemeChange);
+    return () => window.removeEventListener('dashboard-theme-change', handleThemeChange);
+  }, []);
+
+  return theme;
+};
+
+const getChartPalette = () => (
+  window.getDashboardThemePalette
+    ? window.getDashboardThemePalette()
+    : {
+        chartText: '#49454F',
+      }
+);
+
 const ChartCanvas = ({ config, height = 260 }) => {
   const ref = useRef(null);
   const chart = useRef(null);
@@ -137,6 +160,8 @@ function writeHealthCache(rows) {
 }
 
 const CompanyHealthView = ({ rows }) => {
+  const theme = useDashboardTheme();
+  const chartPalette = useMemo(() => getChartPalette(), [theme]);
   const [rag, setRag] = useState('');
   const [query, setQuery] = useState('');
 
@@ -201,11 +226,11 @@ const CompanyHealthView = ({ rows }) => {
       plugins: {
         legend: {
           position: 'right',
-          labels: { color:'#49454F', font:{ family:'Poppins', size:11 }, boxWidth: 12 }
+          labels: { color: chartPalette.chartText, font:{ family:'Poppins', size:11 }, boxWidth: 12 }
         }
       }
     }
-  }), [stats]);
+  }), [stats, chartPalette]);
 
   const topRisk = useMemo(() => (
     [...filtered]
