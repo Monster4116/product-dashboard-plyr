@@ -18,7 +18,7 @@
         <div class="logo">Product Dashboard</div>
         <div class="header-sub">Home page for the live dashboard pages</div>
       </div>
-      <a class="header-link" href="finance-adjustments.html">Open finance dashboard</a>
+      <a class="header-link" href="company-health.html">Open company health dashboard</a>
     </header>
     <section class="app-main">
       <div class="tab-content">
@@ -27,7 +27,7 @@
             <div class="eyebrow">Dashboard suite</div>
             <h1 class="page-hero-title">Available dashboards</h1>
             <p class="page-hero-copy">
-              The dashboard now has a shared shell with separate page files. Right now the live data footprint is intentionally narrow: one finance dashboard powered by Supabase.
+              The dashboard now has a shared shell with separate page files. Right now the live data footprint is intentionally narrow: finance adjustments and company health, both delivered through the shared dashboard structure.
             </p>
           </div>
           <div class="hero-stat-block" id="hero-stats"></div>
@@ -35,23 +35,23 @@
 
         <section class="info-strip">
           <div class="info-strip-item">
-            <span class="info-strip-label">Current live dashboard</span>
-            <span class="info-strip-value">Finance adjustments in Supabase</span>
+            <span class="info-strip-label">Current live dashboards</span>
+            <span class="info-strip-value">Finance adjustments and company health</span>
           </div>
           <div class="info-strip-item">
             <span class="info-strip-label">Architecture</span>
             <span class="info-strip-value">Separate pages with a shared dashboard shell</span>
           </div>
           <div class="info-strip-item">
-            <span class="info-strip-label">Next focus</span>
-            <span class="info-strip-value">Security hardening and access boundaries</span>
+            <span class="info-strip-label">Current pattern</span>
+            <span class="info-strip-value">Service-backed pages with mock-first integration</span>
           </div>
         </section>
 
         <section class="section-header">
           <div>
-            <h2 class="section-title">Live dashboard</h2>
-            <p class="section-sub">Only pages backed by live data are listed here.</p>
+            <h2 class="section-title">Live dashboards</h2>
+            <p class="section-sub">Only pages already added to the shared dashboard shell are listed here.</p>
           </div>
         </section>
 
@@ -59,7 +59,7 @@
 
         <section class="home-footer-note">
           <span>Playroll Internal Analytics</span>
-          <span>Finance adjustments is the current live dashboard</span>
+          <span>Finance adjustments and company health are the current dashboard pages</span>
         </section>
       </div>
     </section>
@@ -74,13 +74,27 @@
   document.getElementById('hero-stats').innerHTML = `
     <span class="status-pill live">${stats.liveDashboards} of ${stats.totalDashboards} live</span>
     <div class="hero-stat-kicker">Current structure</div>
-    <div class="hero-stat-value">${stats.totalDashboards} live page</div>
-    <div class="hero-stat-meta">Home plus one dedicated finance dashboard page</div>
+    <div class="hero-stat-value">${stats.totalDashboards} live pages</div>
+    <div class="hero-stat-meta">Home plus dedicated dashboard pages for finance and company health</div>
   `;
 
   const cards = window.DASHBOARD_PAGES
-    .filter(page => page.id === 'finance-adjustments')
+    .filter(page => page.id !== 'home')
     .map(page => {
+      const meta = page.id === 'company-health'
+        ? ['Data source: Shared dashboard service', 'Dataset: Company health score']
+        : ['Data source: Shared dashboard service', 'Dataset: Finance adjustments'];
+      const highlights = page.id === 'company-health'
+        ? [
+            'RAG distribution and coverage overview',
+            'Lowest-score companies and support pressure',
+            'Company-level driver signals across growth, CSM, NPS and support',
+          ]
+        : [
+            'Monthly volume and exposure trend',
+            'Primary aspect concentration',
+            'Latest adjustment records with filtering',
+          ];
       return `
         <article class="dashboard-card ${page.accentClass}">
           <div class="dashboard-card-top">
@@ -90,13 +104,13 @@
           <h3 class="dashboard-card-title">${page.cardTitle}</h3>
           <p class="dashboard-card-copy">${page.description}</p>
           <div class="dashboard-card-meta">
-            <span>Data source: Supabase</span>
-            <span>Dataset: Finance adjustments</span>
+            <span>${meta[0]}</span>
+            <span>${meta[1]}</span>
           </div>
           <ul class="dashboard-highlight-list">
-            <li>Monthly volume and exposure trend</li>
-            <li>Primary aspect concentration</li>
-            <li>Latest adjustment records with filtering</li>
+            <li>${highlights[0]}</li>
+            <li>${highlights[1]}</li>
+            <li>${highlights[2]}</li>
           </ul>
           <a class="dashboard-card-link" href="${page.href}">Open dashboard</a>
         </article>

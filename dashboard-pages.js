@@ -22,6 +22,18 @@ window.DASHBOARD_PAGES = [
     icon: 'FA',
     cardTitle: 'Finance adjustments',
     description: 'Analyse payroll adjustment variances by primary aspect, territory, company and employee, with trend and exposure views.'
+  },
+  {
+    id: 'company-health',
+    label: 'Company Health',
+    title: 'Company Health',
+    href: 'company-health.html',
+    navGroup: 'Pages',
+    status: 'live',
+    accentClass: 'accent-success',
+    icon: 'CH',
+    cardTitle: 'Company health',
+    description: 'Monitor company-level health scores, RAG coverage, support pressure and the drivers behind at-risk accounts.'
   }
 ];
 

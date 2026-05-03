@@ -1,13 +1,17 @@
 import { publicConfig } from '../config/public-config.js';
 import { getJson } from '../utils/http.js';
 import {
+  mapCompanyHealth,
   mapDashboardSummary,
   mapFinanceAdjustment,
   mapList,
   mapResearchItem,
   mapSupportTicket,
 } from '../mappers/dashboard.mapper.js';
-import { financeAdjustmentsMockResponse } from './mock-data/dashboard.mock.js';
+import {
+  companyHealthMockResponse,
+  financeAdjustmentsMockResponse,
+} from './mock-data/dashboard.mock.js';
 
 // Frontend pages should call these service functions instead of
 // attempting to talk directly to a privileged database.
@@ -55,11 +59,20 @@ export const getFinanceAdjustments = async () => {
   return requestList('/finance-adjustments', mapFinanceAdjustment);
 };
 
+export const getCompanyHealth = async () => {
+  if (isLocalMockMode) {
+    return mapList(companyHealthMockResponse.items, mapCompanyHealth);
+  }
+
+  return requestList('/dashboard/company-health', mapCompanyHealth);
+};
+
 export const getResearchData = async () => requestList('/dashboard/research', mapResearchItem);
 
 export default {
   getDashboardSummary,
   getSupportTickets,
   getFinanceAdjustments,
+  getCompanyHealth,
   getResearchData,
 };

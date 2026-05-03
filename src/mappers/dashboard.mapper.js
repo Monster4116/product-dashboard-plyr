@@ -43,6 +43,58 @@ export const mapFinanceAdjustment = (rawItem = {}) => ({
   confidence: toNumber(rawItem.confidence, 0),
 });
 
+export const mapCompanyHealth = (rawItem = {}) => {
+  const metricCountEnabled = toNumber(rawItem.metricCountEnabled, 0);
+  const metricCountSuccess = toNumber(rawItem.metricCountSuccess, 0);
+
+  return {
+    companyId: toStringValue(rawItem.companyId, ''),
+    scoreDate: toStringValue(rawItem.scoreDate, ''),
+    score: toNumber(rawItem.score, 0),
+    rag: toStringValue(rawItem.rag, 'Unknown'),
+    lastUpdated: toStringValue(rawItem.lastUpdated, ''),
+    metricCountEnabled,
+    metricCountSuccess,
+    metricCoveragePct: metricCountEnabled > 0 ? metricCountSuccess / metricCountEnabled : null,
+    growth: {
+      rag: toStringValue(rawItem.growth?.rag, 'Unknown'),
+      status: toStringValue(rawItem.growth?.status, ''),
+      value: toStringValue(rawItem.growth?.value, ''),
+      action: toStringValue(rawItem.growth?.action, ''),
+      detail: toStringValue(rawItem.growth?.detail, ''),
+      priority: toStringValue(rawItem.growth?.priority, ''),
+    },
+    csm: {
+      rag: toStringValue(rawItem.csm?.rag, 'Unknown'),
+      status: toStringValue(rawItem.csm?.status, ''),
+      value: toStringValue(rawItem.csm?.value, ''),
+      action: toStringValue(rawItem.csm?.action, ''),
+      detail: toStringValue(rawItem.csm?.detail, ''),
+      priority: toStringValue(rawItem.csm?.priority, ''),
+    },
+    nps: {
+      rag: toStringValue(rawItem.nps?.rag, 'Unknown'),
+      status: toStringValue(rawItem.nps?.status, ''),
+      value: toStringValue(rawItem.nps?.value, ''),
+      action: toStringValue(rawItem.nps?.action, ''),
+      detail: toStringValue(rawItem.nps?.detail, ''),
+      priority: toStringValue(rawItem.nps?.priority, ''),
+    },
+    support: {
+      rag: toStringValue(rawItem.support?.rag, 'Unknown'),
+      status: toStringValue(rawItem.support?.status, ''),
+      value: toStringValue(rawItem.support?.value, ''),
+      ticketCount: toNumber(rawItem.support?.ticketCount, 0),
+      criticalCount: toNumber(rawItem.support?.criticalCount, 0),
+      avgScore: toNumber(rawItem.support?.avgScore, 0),
+      avgHours: toNumber(rawItem.support?.avgHours, 0),
+      action: toStringValue(rawItem.support?.action, ''),
+      detail: toStringValue(rawItem.support?.detail, ''),
+      priority: toStringValue(rawItem.support?.priority, ''),
+    },
+  };
+};
+
 export const mapResearchItem = (rawItem = {}) => ({
   id: toStringValue(rawItem.id, ''),
   title: toStringValue(rawItem.title, 'Untitled'),
@@ -59,4 +111,5 @@ export const mapList = (items, mapper) => {
 // Backward-compatible aliases for earlier scaffolding names.
 export const mapSupportTicketItem = mapSupportTicket;
 export const mapFinanceAdjustmentItem = mapFinanceAdjustment;
+export const mapCompanyHealthItem = mapCompanyHealth;
 export const mapResearchDataItem = mapResearchItem;
