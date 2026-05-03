@@ -643,6 +643,191 @@ button,select,input{font-family:inherit}
 .dashboard-card-link.muted{
   color:var(--text-disabled);
 }
+.action-card-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:16px;
+  margin-bottom:18px;
+}
+.action-card{
+  background:var(--bg-paper);
+  border-radius:var(--radius);
+  padding:18px;
+  border:1px solid var(--surface-high);
+  box-shadow:var(--shadow-elevation);
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.action-card-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.action-card-eyebrow{
+  font-size:0.6875rem;
+  font-weight:700;
+  color:var(--text-secondary);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  margin-bottom:6px;
+}
+.action-card-title{
+  font-size:1.15rem;
+  line-height:1.2;
+}
+.action-card-copy{
+  color:var(--text-secondary);
+  font-size:0.875rem;
+  line-height:1.55;
+}
+.action-status-pill,
+.result-status-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:5px 10px;
+  border-radius:999px;
+  font-size:0.625rem;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.impact-safe{
+  color:#0F8A5F;
+  background:#EAF8F1;
+  border:1px solid #BEE7CD;
+}
+.impact-internal{
+  color:#4E3AA5;
+  background:#F1EBFF;
+  border:1px solid #D5C7FF;
+}
+.impact-integration{
+  color:#2879D0;
+  background:#EAF5FF;
+  border:1px solid #BFDDFF;
+}
+.action-tag-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.action-tag{
+  display:inline-flex;
+  align-items:center;
+  padding:4px 10px;
+  border-radius:999px;
+  background:var(--surface-low);
+  color:var(--text-secondary);
+  font-size:0.6875rem;
+  font-weight:600;
+}
+.action-btn-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.action-btn{
+  border:none;
+  cursor:pointer;
+  border-radius:var(--radius-sm);
+  padding:10px 14px;
+  background:var(--color-primary-main);
+  color:#fff;
+  font-family:var(--font);
+  font-size:0.8125rem;
+  font-weight:600;
+  transition:transform .12s ease, opacity .12s ease, background .12s ease;
+}
+.action-btn:hover{transform:translateY(-1px)}
+.action-btn.secondary{
+  background:var(--surface-low);
+  color:var(--text-primary);
+  border:1px solid var(--surface-highest);
+}
+.action-btn:disabled{
+  opacity:0.55;
+  cursor:not-allowed;
+  transform:none;
+}
+.action-card-footer{
+  margin-top:auto;
+  padding-top:12px;
+  border-top:1px solid var(--surface-high);
+}
+.action-card-footer-label{
+  display:block;
+  font-size:0.6875rem;
+  font-weight:600;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--text-secondary);
+  margin-bottom:6px;
+}
+.action-card-footer-line{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  color:var(--text-secondary);
+  font-size:0.8125rem;
+}
+.action-result-panel{
+  margin-bottom:0;
+}
+.action-result-stack{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.action-result-meta{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:12px;
+}
+.action-result-label{
+  font-size:0.6875rem;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:var(--text-secondary);
+  margin-bottom:4px;
+}
+.action-result-value{
+  color:var(--text-primary);
+  font-size:0.875rem;
+  font-weight:600;
+}
+.action-result-message-row{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:10px;
+  color:var(--text-secondary);
+  font-size:0.875rem;
+}
+.result-status-pill.pos{
+  color:#0F8A5F;
+  background:#EAF8F1;
+  border:1px solid #BEE7CD;
+}
+.result-status-pill.neg{
+  color:#C23B2A;
+  background:#FFF0EE;
+  border:1px solid #F7C5BE;
+}
+.action-result-code{
+  margin:0;
+  padding:14px;
+  border-radius:14px;
+  background:#15122A;
+  color:#E6E0FF;
+  font-size:0.75rem;
+  line-height:1.55;
+  overflow:auto;
+}
 .status-pill{
   display:inline-flex;
   align-items:center;
@@ -809,6 +994,9 @@ table.sub-table td.neg{color:var(--color-error-main)}
   .banner-tech-panel{
     right:18px;
     width:170px;
+  }
+  .action-btn-row{
+    flex-direction:column;
   }
   .dashboard-card-grid,
   .dashboard-card-grid.single-card{grid-template-columns:1fr}

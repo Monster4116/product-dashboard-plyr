@@ -57,4 +57,7 @@ export const requestJson = async (path, options = {}) => {
 
 export const getJson = async (path, options = {}) => requestJson(path, { ...options, method: 'GET' });
 
+export const postJson = async (path, body, options = {}) =>
+  requestJson(path, { ...options, method: 'POST', body });
+
 export default requestJson;

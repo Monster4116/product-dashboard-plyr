@@ -1,6 +1,8 @@
 import { publicConfig } from '../config/public-config.js';
-import { getJson } from '../utils/http.js';
+import { getJson, postJson } from '../utils/http.js';
 import {
+  mapActionDefinition,
+  mapActionRunResult,
   mapCompanyHealth,
   mapDashboardSummary,
   mapFinanceAdjustment,
@@ -9,8 +11,10 @@ import {
   mapSupportTicket,
 } from '../mappers/dashboard.mapper.js';
 import {
+  actionsMockResponse,
   companyHealthMockResponse,
   financeAdjustmentsMockResponse,
+  runMockAction,
 } from './mock-data/dashboard.mock.js';
 
 // Frontend pages should call these service functions instead of
@@ -67,6 +71,28 @@ export const getCompanyHealth = async () => {
   return requestList('/company-health', mapCompanyHealth);
 };
 
+export const getAvailableActions = async () => {
+  if (isLocalMockMode) {
+    return mapList(actionsMockResponse.items, mapActionDefinition);
+  }
+
+  return requestList('/actions', mapActionDefinition);
+};
+
+export const triggerAction = async (actionId, payload = {}) => {
+  if (isLocalMockMode) {
+    return mapActionRunResult(runMockAction(actionId, payload));
+  }
+
+  const response = await postJson('/actions', {
+    actionId,
+    mode: payload.mode || 'dry_run',
+    input: payload.input || {},
+  });
+
+  return mapActionRunResult(response);
+};
+
 export const getResearchData = async () => requestList('/dashboard/research', mapResearchItem);
 
 export default {
@@ -74,5 +100,7 @@ export default {
   getSupportTickets,
   getFinanceAdjustments,
   getCompanyHealth,
+  getAvailableActions,
+  triggerAction,
   getResearchData,
 };

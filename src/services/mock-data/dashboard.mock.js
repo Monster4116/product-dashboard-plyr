@@ -362,3 +362,111 @@ export const companyHealthMockResponse = {
     },
   ],
 };
+
+export const actionsMockResponse = {
+  items: [
+    {
+      id: 'run_diagnostics',
+      name: 'Run diagnostics',
+      description: 'Check that dashboard datasets and server-side action wiring are reachable.',
+      category: 'Diagnostics',
+      impact: 'safe',
+      defaultMode: 'dry_run',
+      allowLiveRun: false,
+      liveEnabled: false,
+      buttonLabel: 'Run diagnostics',
+    },
+    {
+      id: 'recalculate_company_health',
+      name: 'Recalculate company health',
+      description: 'Run the current company health summary calculation without writing back to the database.',
+      category: 'Calculations',
+      impact: 'internal',
+      defaultMode: 'dry_run',
+      allowLiveRun: false,
+      liveEnabled: false,
+      buttonLabel: 'Preview calculation',
+    },
+    {
+      id: 'send_test_webhook',
+      name: 'Send test webhook',
+      description: 'Preview or send a test payload to the server-side allowlisted webhook target.',
+      category: 'Webhooks',
+      impact: 'integration',
+      defaultMode: 'dry_run',
+      allowLiveRun: true,
+      liveEnabled: false,
+      buttonLabel: 'Preview webhook',
+    },
+  ],
+};
+
+export const runMockAction = (actionId, payload = {}) => {
+  const mode = payload.mode || 'dry_run';
+  const ranAt = new Date().toISOString();
+
+  switch (actionId) {
+    case 'run_diagnostics':
+      return {
+        ok: true,
+        actionId,
+        status: 'success',
+        message: 'Diagnostics completed in local mock mode.',
+        mode,
+        ranAt,
+        result: {
+          datasetChecks: {
+            financeAdjustments: 'mock-ready',
+            companyHealth: 'mock-ready',
+          },
+          webhookConfigured: false,
+          environment: 'local',
+        },
+      };
+    case 'recalculate_company_health':
+      return {
+        ok: true,
+        actionId,
+        status: 'success',
+        message: 'Company health recalculation preview completed in local mode.',
+        mode,
+        ranAt,
+        result: {
+          averageScore: 59,
+          redCompanies: 2,
+          amberCompanies: 2,
+          greenCompanies: 2,
+        },
+      };
+    case 'send_test_webhook':
+      return {
+        ok: true,
+        actionId,
+        status: 'success',
+        message: mode === 'live'
+          ? 'Live webhook sending is disabled in local mock mode.'
+          : 'Webhook preview payload generated in local mode.',
+        mode,
+        ranAt,
+        result: {
+          wouldSend: mode === 'live' ? false : true,
+          webhookConfigured: false,
+          payloadPreview: {
+            source: 'actions-page',
+            actionId,
+            mode,
+          },
+        },
+      };
+    default:
+      return {
+        ok: false,
+        actionId,
+        status: 'failed',
+        message: `Unknown mock action: ${actionId}`,
+        mode,
+        ranAt,
+        result: {},
+      };
+  }
+};
