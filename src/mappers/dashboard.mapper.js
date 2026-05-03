@@ -103,6 +103,28 @@ export const mapResearchItem = (rawItem = {}) => ({
   updatedAt: toStringValue(rawItem.updatedAt, ''),
 });
 
+export const mapActionDefinition = (rawItem = {}) => ({
+  id: toStringValue(rawItem.id, ''),
+  name: toStringValue(rawItem.name, 'Untitled action'),
+  description: toStringValue(rawItem.description, ''),
+  category: toStringValue(rawItem.category, 'Internal'),
+  impact: toStringValue(rawItem.impact, 'safe'),
+  defaultMode: toStringValue(rawItem.defaultMode, 'dry_run'),
+  allowLiveRun: Boolean(rawItem.allowLiveRun),
+  liveEnabled: Boolean(rawItem.liveEnabled),
+  buttonLabel: toStringValue(rawItem.buttonLabel, 'Run action'),
+});
+
+export const mapActionRunResult = (rawItem = {}) => ({
+  ok: Boolean(rawItem.ok),
+  actionId: toStringValue(rawItem.actionId, ''),
+  status: toStringValue(rawItem.status, 'unknown'),
+  message: toStringValue(rawItem.message, ''),
+  mode: toStringValue(rawItem.mode, 'dry_run'),
+  ranAt: toStringValue(rawItem.ranAt, ''),
+  result: rawItem.result && typeof rawItem.result === 'object' ? rawItem.result : {},
+});
+
 export const mapList = (items, mapper) => {
   if (!Array.isArray(items)) return [];
   return items.map((item) => mapper(item));
@@ -112,4 +134,6 @@ export const mapList = (items, mapper) => {
 export const mapSupportTicketItem = mapSupportTicket;
 export const mapFinanceAdjustmentItem = mapFinanceAdjustment;
 export const mapCompanyHealthItem = mapCompanyHealth;
+export const mapActionDefinitionItem = mapActionDefinition;
+export const mapActionRunResultItem = mapActionRunResult;
 export const mapResearchDataItem = mapResearchItem;

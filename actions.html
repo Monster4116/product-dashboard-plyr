@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product One | Actions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script>
+  window.__PUBLIC_CONFIG__ = {
+    appEnv: 'production',
+    apiBaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co/functions/v1',
+  };
+</script>
+<script src="dashboard-pages.js"></script>
+<script type="module" src="src/services/dashboard-api.browser.js"></script>
+<script type="text/babel">
+const { useEffect, useMemo, useState } = React;
+
+const fmt = {
+  dateTime: (value) => value
+    ? new Date(value).toLocaleString('en-GB', { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+    : '---',
+};
+
+const ACTIONS_ENV = window.__PUBLIC_CONFIG__?.appEnv ?? 'local';
+
+const LoadingScreen = () => (
+  <div className="center-screen">
+    <div className="spinner" />
+    <p style={{ color:'var(--text-secondary)', fontSize:'0.8125rem' }}>Loading available actions…</p>
+  </div>
+);
+
+const ErrorScreen = ({ message }) => (
+  <div className="center-screen">
+    <div className="err-title">Failed to load actions</div>
+    <div className="err-msg">{message}</div>
+    <div className="err-msg" style={{ marginTop: 8 }}>
+      This page triggers actions through the shared service and server-side action runner instead of calling webhooks directly from the browser.
+    </div>
+  </div>
+);
+
+const impactLabel = (value) => {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'integration') return 'Integration';
+  if (normalized === 'internal') return 'Internal';
+  return 'Safe';
+};
+
+const impactClass = (value) => {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'integration') return 'impact-integration';
+  if (normalized === 'internal') return 'impact-internal';
+  return 'impact-safe';
+};
+
+const statusTone = (value) => {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'failed') return 'neg';
+  if (normalized === 'success') return 'pos';
+  return '';
+};
+
+const StatusPill = ({ value }) => (
+  <span className={`action-status-pill ${impactClass(value)}`}>{impactLabel(value)}</span>
+);
+
+const ResultToneBadge = ({ value }) => (
+  <span className={`result-status-pill ${statusTone(value)}`}>{value || 'idle'}</span>
+);
+
+const ActionCard = ({ action, result, running, onRun }) => {
+  const liveReady = action.allowLiveRun && action.liveEnabled;
+
+  return (
+    <article className="action-card">
+      <div className="action-card-header">
+        <div>
+          <div className="action-card-eyebrow">{action.category}</div>
+          <h3 className="action-card-title">{action.name}</h3>
+        </div>
+        <StatusPill value={action.impact} />
+      </div>
+
+      <p className="action-card-copy">{action.description}</p>
+
+      <div className="action-tag-row">
+        <span className="action-tag">Default mode: dry run</span>
+        <span className="action-tag">{liveReady ? 'Live webhook enabled' : 'Safe server-side path'}</span>
+      </div>
+
+      <div className="action-btn-row">
+        <button
+          className="action-btn"
+          onClick={() => onRun(action, 'dry_run')}
+          disabled={running}
+        >
+          {running ? 'Running…' : action.buttonLabel}
+        </button>
+        {action.allowLiveRun && (
+          <button
+            className="action-btn secondary"
+            onClick={() => onRun(action, 'live')}
+            disabled={running || !action.liveEnabled}
+            title={action.liveEnabled ? 'Send live action' : 'Live webhook is not configured yet'}
+          >
+            Run live
+          </button>
+        )}
+      </div>
+
+      <div className="action-card-footer">
+        <div className="action-card-footer-copy">
+          <span className="action-card-footer-label">Latest status</span>
+          <div className="action-card-footer-line">
+            <ResultToneBadge value={result?.status || 'idle'} />
+            <span>{result?.message || 'No runs yet'}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+};
+
+const App = () => {
+  const [actions, setActions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [runningActionId, setRunningActionId] = useState('');
+  const [resultsByAction, setResultsByAction] = useState({});
+  const [latestResult, setLatestResult] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (!window.dashboardApi || typeof window.dashboardApi.getAvailableActions !== 'function') {
+          throw new Error('The shared dashboard service is not available in the browser yet.');
+        }
+
+        const availableActions = await window.dashboardApi.getAvailableActions();
+        setActions(availableActions);
+      } catch (e) {
+        setError(e.message || String(e));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, []);
+
+  const runAction = async (action, mode) => {
+    try {
+      setRunningActionId(action.id);
+      const result = await window.dashboardApi.triggerAction(action.id, {
+        mode,
+        input: {
+          pageId: 'actions',
+          actionName: action.name,
+        },
+      });
+      setResultsByAction((previous) => ({ ...previous, [action.id]: result }));
+      setLatestResult(result);
+    } catch (e) {
+      const failedResult = {
+        ok: false,
+        actionId: action.id,
+        status: 'failed',
+        message: e.message || String(e),
+        mode,
+        ranAt: new Date().toISOString(),
+        result: {},
+      };
+      setResultsByAction((previous) => ({ ...previous, [action.id]: failedResult }));
+      setLatestResult(failedResult);
+    } finally {
+      setRunningActionId('');
+    }
+  };
+
+  const actionsSummary = useMemo(() => ({
+    total: actions.length,
+    liveReady: actions.filter((action) => action.allowLiveRun && action.liveEnabled).length,
+  }), [actions]);
+
+  const sidebar = { __html: window.renderSidebar('actions') };
+
+  return (
+    <div className="shell">
+      <div style={{ display:'contents' }} dangerouslySetInnerHTML={sidebar} />
+      <main className="app">
+        <header className="app-header">
+          <div className="header-left">
+            <div className="logo">Actions</div>
+            <div className="header-sub">Controlled diagnostics, calculations and test integrations</div>
+          </div>
+          <a className="header-link" href="index.html">Back to home</a>
+        </header>
+
+        <section className="app-main">
+          {loading ? <LoadingScreen /> : error ? <ErrorScreen message={error} /> : (
+            <div className="tab-content">
+              <section className="page-hero compact">
+                <div>
+                  <div className="eyebrow">Action center</div>
+                  <h1 className="page-hero-title">Run controlled dashboard actions</h1>
+                  <p className="page-hero-copy">
+                    Use this page to run diagnostics, preview internal calculations and test server-side webhook delivery without exposing targets or secrets in the browser.
+                  </p>
+                </div>
+                <div className="hero-stat-block">
+                  <span className="status-pill live">Live</span>
+                  <div className="hero-stat-kicker">Action runner</div>
+                  <div className="hero-stat-value">{ACTIONS_ENV === 'local' ? 'Local mock' : 'Dashboard API'}</div>
+                  <div className="hero-stat-meta">{actionsSummary.total} available actions · {actionsSummary.liveReady} live-enabled</div>
+                </div>
+              </section>
+
+              <section className="info-strip">
+                <div className="info-strip-item">
+                  <span className="info-strip-label">Current action types</span>
+                  <span className="info-strip-value">Diagnostics, calculations and webhooks</span>
+                </div>
+                <div className="info-strip-item">
+                  <span className="info-strip-label">Execution model</span>
+                  <span className="info-strip-value">Frontend button to server-side action runner</span>
+                </div>
+                <div className="info-strip-item">
+                  <span className="info-strip-label">Safety default</span>
+                  <span className="info-strip-value">Dry run first, live only when explicitly enabled</span>
+                </div>
+              </section>
+
+              <section className="section-header">
+                <div>
+                  <h2 className="section-title">Available actions</h2>
+                  <p className="section-sub">Each card calls the shared action runner. Webhooks never leave the browser directly.</p>
+                </div>
+              </section>
+
+              <section className="action-card-grid">
+                {actions.map((action) => (
+                  <ActionCard
+                    key={action.id}
+                    action={action}
+                    result={resultsByAction[action.id]}
+                    running={runningActionId === action.id}
+                    onRun={runAction}
+                  />
+                ))}
+              </section>
+
+              <section className="chart-card action-result-panel">
+                <div className="chart-title">Latest action result</div>
+                {latestResult ? (
+                  <div className="action-result-stack">
+                    <div className="action-result-meta">
+                      <div>
+                        <div className="action-result-label">Action</div>
+                        <div className="action-result-value">{latestResult.actionId}</div>
+                      </div>
+                      <div>
+                        <div className="action-result-label">Mode</div>
+                        <div className="action-result-value">{latestResult.mode}</div>
+                      </div>
+                      <div>
+                        <div className="action-result-label">Ran at</div>
+                        <div className="action-result-value">{fmt.dateTime(latestResult.ranAt)}</div>
+                      </div>
+                    </div>
+
+                    <div className="action-result-message-row">
+                      <ResultToneBadge value={latestResult.status} />
+                      <span>{latestResult.message}</span>
+                    </div>
+
+                    <pre className="action-result-code">{JSON.stringify(latestResult.result || {}, null, 2)}</pre>
+                  </div>
+                ) : (
+                  <div className="no-data">Run an action to see the latest result payload here.</div>
+                )}
+              </section>
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

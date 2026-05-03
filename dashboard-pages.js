@@ -34,6 +34,18 @@ window.DASHBOARD_PAGES = [
     icon: 'CH',
     cardTitle: 'Company health',
     description: 'Monitor company-level health scores, RAG coverage, support pressure and the drivers behind at-risk accounts.'
+  },
+  {
+    id: 'actions',
+    label: 'Actions',
+    title: 'Actions',
+    href: 'actions.html',
+    navGroup: 'Pages',
+    status: 'live',
+    accentClass: 'accent-info',
+    icon: 'AX',
+    cardTitle: 'Actions',
+    description: 'Trigger controlled diagnostics, calculation previews and test integrations through the dashboard action runner.'
   }
 ];
 
