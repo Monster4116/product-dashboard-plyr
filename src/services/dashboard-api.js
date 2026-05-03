@@ -64,7 +64,7 @@ export const getCompanyHealth = async () => {
     return mapList(companyHealthMockResponse.items, mapCompanyHealth);
   }
 
-  return requestList('/dashboard/company-health', mapCompanyHealth);
+  return requestList('/company-health', mapCompanyHealth);
 };
 
 export const getResearchData = async () => requestList('/dashboard/research', mapResearchItem);
