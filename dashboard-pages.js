@@ -1,3 +1,95 @@
+const DASHBOARD_THEME_KEY = 'dashboard.theme';
+
+function resolveDashboardTheme(theme) {
+  return theme === 'dark' ? 'dark' : 'light';
+}
+
+window.getDashboardTheme = function getDashboardTheme() {
+  const bodyTheme = document.body?.dataset?.theme;
+  if (bodyTheme === 'dark' || bodyTheme === 'light') return bodyTheme;
+
+  try {
+    const saved = localStorage.getItem(DASHBOARD_THEME_KEY);
+    if (saved === 'dark' || saved === 'light') return saved;
+  } catch (_) {
+    // Ignore storage read failures and fall back to light mode.
+  }
+
+  return 'light';
+};
+
+window.getDashboardThemePalette = function getDashboardThemePalette() {
+  const styles = getComputedStyle(document.body || document.documentElement);
+  return {
+    chartText: styles.getPropertyValue('--chart-text').trim() || styles.getPropertyValue('--text-secondary').trim() || '#49454F',
+    chartGrid: styles.getPropertyValue('--chart-grid').trim() || styles.getPropertyValue('--surface-high').trim() || '#E9E9EA',
+    chartBar: styles.getPropertyValue('--chart-bar').trim() || '#5110DDAA',
+    chartBarBorder: styles.getPropertyValue('--chart-bar-border').trim() || '#5110DD',
+    chartLine: styles.getPropertyValue('--chart-line').trim() || '#36B1FF',
+    chartFill: styles.getPropertyValue('--chart-fill').trim() || '#36B1FF22',
+  };
+};
+
+window.syncDashboardThemeButtons = function syncDashboardThemeButtons() {
+  const theme = window.getDashboardTheme();
+  const isDark = theme === 'dark';
+  const icon = isDark ? '☀' : '☾';
+  const label = isDark ? 'Light mode' : 'Dark mode';
+  const state = isDark ? 'On' : 'Off';
+
+  document.querySelectorAll('[data-theme-toggle-icon]').forEach(node => {
+    node.textContent = icon;
+  });
+
+  document.querySelectorAll('[data-theme-toggle-label]').forEach(node => {
+    node.textContent = label;
+  });
+
+  document.querySelectorAll('[data-theme-toggle-state]').forEach(node => {
+    node.textContent = state;
+  });
+};
+
+window.applyDashboardTheme = function applyDashboardTheme(theme, options = {}) {
+  const resolvedTheme = resolveDashboardTheme(theme);
+
+  if (document.body) {
+    document.body.dataset.theme = resolvedTheme;
+  }
+
+  document.documentElement.dataset.theme = resolvedTheme;
+
+  if (options.persist !== false) {
+    try {
+      localStorage.setItem(DASHBOARD_THEME_KEY, resolvedTheme);
+    } catch (_) {
+      // Ignore storage write failures and continue with the in-memory theme.
+    }
+  }
+
+  window.syncDashboardThemeButtons();
+
+  if (options.emit !== false) {
+    window.dispatchEvent(new CustomEvent('dashboard-theme-change', {
+      detail: { theme: resolvedTheme },
+    }));
+  }
+
+  return resolvedTheme;
+};
+
+window.toggleDashboardTheme = function toggleDashboardTheme() {
+  const nextTheme = window.getDashboardTheme() === 'dark' ? 'light' : 'dark';
+  return window.applyDashboardTheme(nextTheme);
+};
+
+window.addEventListener('storage', event => {
+  if (event.key !== DASHBOARD_THEME_KEY) return;
+  window.applyDashboardTheme(resolveDashboardTheme(event.newValue), { persist: false, emit: false });
+});
+
+window.applyDashboardTheme(window.getDashboardTheme(), { persist: false, emit: false });
+
 window.DASHBOARD_PAGES = [
   {
     id: 'home',
@@ -74,6 +166,7 @@ window.getDashboardStats = function getDashboardStats() {
 window.renderSidebar = function renderSidebar(activePageId) {
   const pages = window.DASHBOARD_PAGES || [];
   const groups = [...new Set(pages.map(page => page.navGroup))];
+  const isDark = window.getDashboardTheme() === 'dark';
 
   const navSections = groups.map(group => {
     const items = pages
@@ -104,6 +197,13 @@ window.renderSidebar = function renderSidebar(activePageId) {
         ${navSections}
       </div>
       <div class="sidebar-footer">
+        <button class="theme-toggle" type="button" onclick="window.toggleDashboardTheme()">
+          <span class="theme-toggle-icon" data-theme-toggle-icon>${isDark ? '☀' : '☾'}</span>
+          <span class="theme-toggle-copy">
+            <span class="theme-toggle-label" data-theme-toggle-label>${isDark ? 'Light mode' : 'Dark mode'}</span>
+            <span class="theme-toggle-state" data-theme-toggle-state>${isDark ? 'On' : 'Off'}</span>
+          </span>
+        </button>
         <div class="sidebar-footnote">Supabase-backed dashboards</div>
       </div>
     </aside>

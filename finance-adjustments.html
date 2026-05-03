@@ -61,6 +61,34 @@ const monthLabel = key => {
   return new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month:'short', year:'2-digit' });
 };
 
+const useDashboardTheme = () => {
+  const [theme, setTheme] = useState(() => window.getDashboardTheme ? window.getDashboardTheme() : 'light');
+
+  useEffect(() => {
+    const handleThemeChange = event => {
+      setTheme(event.detail?.theme || (window.getDashboardTheme ? window.getDashboardTheme() : 'light'));
+    };
+
+    window.addEventListener('dashboard-theme-change', handleThemeChange);
+    return () => window.removeEventListener('dashboard-theme-change', handleThemeChange);
+  }, []);
+
+  return theme;
+};
+
+const getChartPalette = () => (
+  window.getDashboardThemePalette
+    ? window.getDashboardThemePalette()
+    : {
+        chartText: '#49454F',
+        chartGrid: '#E9E9EA',
+        chartBar: '#5110DDAA',
+        chartBarBorder: '#5110DD',
+        chartLine: '#36B1FF',
+        chartFill: '#36B1FF22',
+      }
+);
+
 const ChartCanvas = ({ config, height = 260 }) => {
   const ref = useRef(null);
   const chart = useRef(null);
@@ -120,6 +148,8 @@ function writeFinanceCache(rows) {
 }
 
 const FinanceView = ({ rows }) => {
+  const theme = useDashboardTheme();
+  const chartPalette = useMemo(() => getChartPalette(), [theme]);
   const [territory, setTerritory] = useState('');
   const [aspect, setAspect] = useState('');
 
@@ -176,21 +206,21 @@ const FinanceView = ({ rows }) => {
     data: {
       labels: stats.months.map(m => monthLabel(m.key)),
       datasets: [
-        { label: 'Records', data: stats.months.map(m => m.records), backgroundColor: '#5110DD30', borderColor: '#5110DD', borderWidth: 1.5, yAxisID: 'y' },
-        { label: 'Abs exposure', data: stats.months.map(m => m.abs), type: 'line', borderColor: '#F44336', backgroundColor: '#F4433610', borderWidth: 2, pointRadius: 3, fill: true, yAxisID: 'y1', tension: 0.3 }
+        { label: 'Records', data: stats.months.map(m => m.records), backgroundColor: chartPalette.chartBar, borderColor: chartPalette.chartBarBorder, borderWidth: 1.5, yAxisID: 'y' },
+        { label: 'Abs exposure', data: stats.months.map(m => m.abs), type: 'line', borderColor: chartPalette.chartLine, backgroundColor: chartPalette.chartFill, borderWidth: 2, pointRadius: 3, fill: true, yAxisID: 'y1', tension: 0.3 }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { labels: { color:'#49454F', font:{ family:'Poppins', size:11 } } } },
+      plugins: { legend: { labels: { color: chartPalette.chartText, font:{ family:'Poppins', size:11 } } } },
       scales: {
-        x: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 } }, grid: { color:'#E9E9EA' } },
-        y: { ticks: { color:'#49454F', font:{ family:'Poppins', size:10 } }, grid: { color:'#E9E9EA' } },
-        y1: { position:'right', ticks: { color:'#49454F', callback: v => fmt.currency(v) }, grid: { display:false } }
+        x: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 } }, grid: { color: chartPalette.chartGrid } },
+        y: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 } }, grid: { color: chartPalette.chartGrid } },
+        y1: { position:'right', ticks: { color: chartPalette.chartText, callback: v => fmt.currency(v) }, grid: { display:false } }
       }
     }
-  }), [stats]);
+  }), [stats, chartPalette]);
 
   const aspectChart = useMemo(() => ({
     type: 'doughnut',
@@ -201,9 +231,9 @@ const FinanceView = ({ rows }) => {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position:'right', labels: { color:'#49454F', font:{ family:'Poppins', size:11 }, boxWidth: 12 } } }
+      plugins: { legend: { position:'right', labels: { color: chartPalette.chartText, font:{ family:'Poppins', size:11 }, boxWidth: 12 } } }
     }
-  }), [stats]);
+  }), [stats, chartPalette]);
 
   return (
     <div className="tab-content">
