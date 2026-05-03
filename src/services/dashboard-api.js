@@ -7,6 +7,7 @@ import {
   mapDashboardSummary,
   mapFinanceAdjustment,
   mapList,
+  mapProductNewsItem,
   mapResearchItem,
   mapSupportTicket,
 } from '../mappers/dashboard.mapper.js';
@@ -14,6 +15,7 @@ import {
   actionsMockResponse,
   companyHealthMockResponse,
   financeAdjustmentsMockResponse,
+  productNewsMockResponse,
   runMockAction,
 } from './mock-data/dashboard.mock.js';
 
@@ -71,6 +73,14 @@ export const getCompanyHealth = async () => {
   return requestList('/company-health', mapCompanyHealth);
 };
 
+export const getProductNews = async () => {
+  if (isLocalMockMode) {
+    return mapList(productNewsMockResponse.items, mapProductNewsItem);
+  }
+
+  return requestList('/product-news', mapProductNewsItem);
+};
+
 export const getAvailableActions = async () => {
   if (isLocalMockMode) {
     return mapList(actionsMockResponse.items, mapActionDefinition);
@@ -100,6 +110,7 @@ export default {
   getSupportTickets,
   getFinanceAdjustments,
   getCompanyHealth,
+  getProductNews,
   getAvailableActions,
   triggerAction,
   getResearchData,

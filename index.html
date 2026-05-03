@@ -18,7 +18,7 @@
         <div class="logo">Product One</div>
         <div class="header-sub">Home page for the live dashboard pages</div>
       </div>
-      <a class="header-link" href="actions.html">Open actions dashboard</a>
+      <a class="header-link" href="product-news.html">Open product news dashboard</a>
     </header>
     <section class="app-main">
       <div class="tab-content">
@@ -27,7 +27,7 @@
             <div class="eyebrow">Dashboard suite</div>
             <h1 class="page-hero-title">Available dashboards</h1>
             <p class="page-hero-copy">
-              The dashboard now has a shared shell with separate page files. Right now the live data footprint is intentionally narrow: finance adjustments, company health and actions, all delivered through the shared dashboard structure.
+              The dashboard now has a shared shell with separate page files. Right now the live data footprint includes product news, finance adjustments, company health and actions, all delivered through the shared dashboard structure.
             </p>
             <div class="home-banner-tag-row">
               <span class="home-banner-tag">Insight-driven</span>
@@ -112,7 +112,7 @@
         <section class="info-strip">
           <div class="info-strip-item">
             <span class="info-strip-label">Current live dashboards</span>
-            <span class="info-strip-value">Finance adjustments, company health and actions</span>
+            <span class="info-strip-value">Product news, finance adjustments, company health and actions</span>
           </div>
           <div class="info-strip-item">
             <span class="info-strip-label">Architecture</span>
@@ -135,7 +135,7 @@
 
         <section class="home-footer-note">
           <span>Product One</span>
-          <span>Finance adjustments, company health and actions are the current dashboard pages</span>
+          <span>Product news, finance adjustments, company health and actions are the current dashboard pages</span>
         </section>
       </div>
     </section>
@@ -168,12 +168,20 @@
   const cards = window.DASHBOARD_PAGES
     .filter(page => page.id !== 'home')
     .map(page => {
-      const meta = page.id === 'company-health'
+      const meta = page.id === 'product-news'
+        ? ['Data source: Shared dashboard service', 'Dataset: Product news feed']
+        : page.id === 'company-health'
         ? ['Data source: Shared dashboard service', 'Dataset: Company health score']
         : page.id === 'actions'
           ? ['Data source: Shared action runner', 'Dataset: Diagnostics and triggers']
           : ['Data source: Shared dashboard service', 'Dataset: Finance adjustments'];
-      const highlights = page.id === 'company-health'
+      const highlights = page.id === 'product-news'
+        ? [
+            'Category mix across competitor, AI, PM and regulatory signals',
+            'Search, filter and scan recent feed items quickly',
+            'Open source links in a new tab for deeper review',
+          ]
+        : page.id === 'company-health'
         ? [
             'RAG distribution and coverage overview',
             'Lowest-score companies and support pressure',

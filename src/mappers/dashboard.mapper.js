@@ -103,6 +103,32 @@ export const mapResearchItem = (rawItem = {}) => ({
   updatedAt: toStringValue(rawItem.updatedAt, ''),
 });
 
+export const mapProductNewsItem = (rawItem = {}) => ({
+  id: toStringValue(rawItem.id, ''),
+  category: toStringValue(rawItem.category, ''),
+  categoryLabel: toStringValue(rawItem.categoryLabel, 'General'),
+  headline: toStringValue(rawItem.headline, 'Untitled'),
+  actor: toStringValue(rawItem.actor, ''),
+  actorType: toStringValue(rawItem.actorType, ''),
+  summary: toStringValue(rawItem.summary, ''),
+  insight: toStringValue(rawItem.insight, ''),
+  sourceUrl: toStringValue(rawItem.sourceUrl, ''),
+  sourceDomain: toStringValue(rawItem.sourceDomain, ''),
+  dateText: toStringValue(rawItem.dateText, ''),
+  itemDate: toStringValue(rawItem.itemDate, ''),
+  researchedAt: toStringValue(rawItem.researchedAt, ''),
+  runType: toStringValue(rawItem.runType, 'daily'),
+  tag: toStringValue(rawItem.tag, ''),
+  region: toStringValue(rawItem.region, ''),
+  eventType: toStringValue(rawItem.eventType, ''),
+  amount: toStringValue(rawItem.amount, ''),
+  stage: toStringValue(rawItem.stage, ''),
+  investors: toStringValue(rawItem.investors, ''),
+  sentiment: toStringValue(rawItem.sentiment, ''),
+  theme: toStringValue(rawItem.theme, ''),
+  descriptor: toStringValue(rawItem.descriptor, ''),
+});
+
 export const mapActionDefinition = (rawItem = {}) => ({
   id: toStringValue(rawItem.id, ''),
   name: toStringValue(rawItem.name, 'Untitled action'),
@@ -136,4 +162,5 @@ export const mapFinanceAdjustmentItem = mapFinanceAdjustment;
 export const mapCompanyHealthItem = mapCompanyHealth;
 export const mapActionDefinitionItem = mapActionDefinition;
 export const mapActionRunResultItem = mapActionRunResult;
+export const mapProductNewsListItem = mapProductNewsItem;
 export const mapResearchDataItem = mapResearchItem;
