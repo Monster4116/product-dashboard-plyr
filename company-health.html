@@ -17,8 +17,8 @@
 <div id="root"></div>
 <script>
   window.__PUBLIC_CONFIG__ = {
-    appEnv: 'local',
-    apiBaseUrl: '/api',
+    appEnv: 'production',
+    apiBaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co/functions/v1',
   };
 </script>
 <script src="dashboard-pages.js"></script>
@@ -38,6 +38,22 @@ const fmt = {
 };
 
 const normalizeRag = value => String(value || 'Unknown').trim();
+
+const summarizeDrivers = (row) => {
+  const drivers = [
+    ['Growth', row.growth?.rag],
+    ['CSM', row.csm?.rag],
+    ['NPS', row.nps?.rag],
+    ['Support', row.support?.rag],
+  ].filter(([, value]) => {
+    const normalized = normalizeRag(value).toLowerCase();
+    return normalized.includes('red') || normalized.includes('amber');
+  });
+
+  if (!drivers.length) return ['Healthy'];
+
+  return drivers.map(([label, value]) => `${label}: ${normalizeRag(value)}`);
+};
 
 const statusClass = value => {
   const normalized = normalizeRag(value).toLowerCase();
@@ -282,7 +298,7 @@ const CompanyHealthView = ({ rows }) => {
         <div className="chart-title">Company health records</div>
         <div className="table-wrap" style={{ marginBottom: 0 }}>
           <table className="data-table">
-            <thead><tr><th>CO ID</th><th>Score date</th><th className="r">Score</th><th>RAG</th><th>Growth RAG</th><th>CSM RAG</th><th>NPS RAG</th><th>Support RAG</th><th className="r">Tickets</th><th className="r">Critical</th><th>Last updated</th></tr></thead>
+            <thead><tr><th>CO ID</th><th>Score date</th><th className="r">Score</th><th>RAG</th><th>Driver summary</th><th className="r">Tickets</th><th className="r">Critical</th><th>Last updated</th></tr></thead>
             <tbody>
               {filtered.map(row => (
                 <tr key={`${row.companyId}-${row.scoreDate}`}>
@@ -290,10 +306,11 @@ const CompanyHealthView = ({ rows }) => {
                   <td>{row.scoreDate || '---'}</td>
                   <td className={`r ${statusClass(row.rag)}`}>{fmt.number(row.score)}</td>
                   <td><StatusBadge value={row.rag} /></td>
-                  <td><StatusBadge value={row.growth.rag} /></td>
-                  <td><StatusBadge value={row.csm.rag} /></td>
-                  <td><StatusBadge value={row.nps.rag} /></td>
-                  <td><StatusBadge value={row.support.rag} /></td>
+                  <td>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                      {summarizeDrivers(row).map(driver => <span key={`${row.companyId}-${driver}`} className="driver-pill">{driver}</span>)}
+                    </div>
+                  </td>
                   <td className="r">{fmt.number(row.support.ticketCount)}</td>
                   <td className="r">{fmt.number(row.support.criticalCount)}</td>
                   <td>{fmt.date(row.lastUpdated)}</td>
@@ -304,8 +321,8 @@ const CompanyHealthView = ({ rows }) => {
         </div>
       </div>
 
-      <div className="chart-card">
-        <div className="chart-title">Priority actions by company</div>
+      <div className="chart-card secondary-section">
+        <div className="chart-title">Recommended actions by company</div>
         <div className="table-wrap" style={{ marginBottom: 0 }}>
           <table className="data-table">
             <thead><tr><th>CO ID</th><th>Growth action</th><th>CSM action</th><th>NPS action</th><th>Support action</th><th>Coverage</th><th className="r">Avg hours</th></tr></thead>
