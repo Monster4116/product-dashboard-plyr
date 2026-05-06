@@ -27,7 +27,7 @@
             <div class="eyebrow">Dashboard suite</div>
             <h1 class="page-hero-title">Available dashboards</h1>
             <p class="page-hero-copy">
-              The dashboard now has a shared shell with separate page files. Right now the live data footprint includes product news, finance adjustments, company health and actions, all delivered through the shared dashboard structure.
+              The dashboard now has a shared shell with separate page files. Right now the live data footprint includes product news, NPS, finance adjustments, company health, support and actions, all delivered through the shared dashboard structure.
             </p>
             <div class="home-banner-tag-row">
               <span class="home-banner-tag">Insight-driven</span>
@@ -88,7 +88,7 @@
               </div>
               <div class="banner-floating-copy">
                 <strong>Idea engine</strong>
-                <span>Concepts and signals shaped into action.</span>
+                <span>Concepts, signals and sentiment shaped into action.</span>
               </div>
             </div>
 
@@ -112,7 +112,7 @@
         <section class="info-strip">
           <div class="info-strip-item">
             <span class="info-strip-label">Current live dashboards</span>
-            <span class="info-strip-value">Product news, finance adjustments, company health and actions</span>
+            <span class="info-strip-value">Product news, NPS, finance adjustments, company health, support and actions</span>
           </div>
           <div class="info-strip-item">
             <span class="info-strip-label">Architecture</span>
@@ -135,7 +135,7 @@
 
         <section class="home-footer-note">
           <span>Product One</span>
-          <span>Product news, finance adjustments, company health and actions are the current dashboard pages</span>
+          <span>Product news, NPS, finance adjustments, company health, support and actions are the current dashboard pages</span>
         </section>
       </div>
     </section>
@@ -170,8 +170,12 @@
     .map(page => {
       const meta = page.id === 'product-news'
         ? ['Data source: Shared dashboard service', 'Dataset: Product news feed']
+        : page.id === 'nps'
+        ? ['Data source: Shared dashboard service', 'Dataset: NPS automation pipeline']
         : page.id === 'company-health'
         ? ['Data source: Shared dashboard service', 'Dataset: Company health score']
+        : page.id === 'support'
+        ? ['Data source: Shared dashboard service', 'Dataset: Support tickets and AI support context']
         : page.id === 'actions'
           ? ['Data source: Shared action runner', 'Dataset: Diagnostics and triggers']
           : ['Data source: Shared dashboard service', 'Dataset: Finance adjustments'];
@@ -181,11 +185,23 @@
             'Search, filter and scan recent feed items quickly',
             'Open source links in a new tab for deeper review',
           ]
+        : page.id === 'nps'
+        ? [
+            'Monthly NPS trend and promoter-passive-detractor split',
+            'Employee vs client sentiment comparison',
+            'Auditable drill-down from headline score to individual responses',
+          ]
         : page.id === 'company-health'
         ? [
             'RAG distribution and coverage overview',
             'Lowest-score companies and support pressure',
             'Company-level driver signals across growth, CSM, NPS and support',
+          ]
+        : page.id === 'support'
+        ? [
+            'Six-month AI-enriched support operations view',
+            'Category, severity, requester and country workload patterns',
+            'Sanitized AI summaries and requester intent without raw comments',
           ]
         : page.id === 'actions'
           ? [

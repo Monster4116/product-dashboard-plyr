@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product One | NPS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script>
+  window.__PUBLIC_CONFIG__ = {
+    appEnv: 'production',
+    apiBaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co/functions/v1',
+  };
+</script>
+<script src="dashboard-pages.js"></script>
+<script type="module" src="src/services/dashboard-api.browser.js"></script>
+<script type="text/babel">
+const { useEffect, useMemo, useRef, useState } = React;
+
+const NPS_ENV = window.__PUBLIC_CONFIG__?.appEnv ?? 'local';
+const CACHE_PREFIX = `dashboard.nps.v1.${NPS_ENV}`;
+
+const fmt = {
+  number: (n) => new Intl.NumberFormat('en-US').format(Math.round(Number(n) || 0)),
+  score: (n) => Number(n || 0).toFixed(1).replace('.0', ''),
+  pct: (n) => n == null ? '---' : `${(Number(n) * 100).toFixed(0)}%`,
+  delta: (n) => {
+    if (n == null) return '---';
+    const value = Number(n);
+    const sign = value > 0 ? '+' : '';
+    return `${sign}${value.toFixed(1).replace('.0', '')}`;
+  },
+  date: (value) => {
+    if (!value) return '---';
+    const parsed = new Date(value.includes('T') ? value : `${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: '2-digit' });
+  },
+  dateTime: (value) => value
+    ? new Date(value).toLocaleString('en-GB', { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+    : '---',
+  monthLabel: (value) => {
+    if (!value) return '---';
+    const parsed = new Date(`${value}-01T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleDateString('en-GB', { year:'numeric', month:'short' });
+  },
+};
+
+const normalizeGroup = (value) => String(value || 'Unknown').trim();
+const normalizeRespondentType = (value) => String(value || 'Unknown').trim();
+
+const useDashboardTheme = () => {
+  const [theme, setTheme] = useState(() => window.getDashboardTheme ? window.getDashboardTheme() : 'light');
+
+  useEffect(() => {
+    const handleThemeChange = (event) => {
+      setTheme(event.detail?.theme || (window.getDashboardTheme ? window.getDashboardTheme() : 'light'));
+    };
+
+    window.addEventListener('dashboard-theme-change', handleThemeChange);
+    return () => window.removeEventListener('dashboard-theme-change', handleThemeChange);
+  }, []);
+
+  return theme;
+};
+
+const getChartPalette = () => (
+  window.getDashboardThemePalette
+    ? window.getDashboardThemePalette()
+    : {
+        chartText: '#49454F',
+        chartGrid: '#E9E9EA',
+        chartBar: '#5110DDAA',
+        chartBarBorder: '#5110DD',
+        chartLine: '#36B1FF',
+      }
+);
+
+const readCache = (collectionVersion) => {
+  try {
+    const raw = sessionStorage.getItem(`${CACHE_PREFIX}.${collectionVersion}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const writeCache = (collectionVersion, payload) => {
+  try {
+    sessionStorage.setItem(`${CACHE_PREFIX}.${collectionVersion}`, JSON.stringify(payload));
+  } catch (_) {
+    // Ignore storage failures and rely on fresh API results.
+  }
+};
+
+const statusClass = (value) => {
+  const number = Number(value);
+  if (number >= 30) return 'pos';
+  if (number <= 0) return 'neg';
+  return '';
+};
+
+const deltaClass = (value) => {
+  const number = Number(value);
+  if (number > 0) return 'pos';
+  if (number < 0) return 'neg';
+  return '';
+};
+
+const groupClass = (value) => {
+  const normalized = normalizeGroup(value).toLowerCase();
+  if (normalized === 'promoter') return 'promoter';
+  if (normalized === 'passive') return 'passive';
+  if (normalized === 'detractor') return 'detractor';
+  return 'neutral';
+};
+
+const ChartCanvas = ({ config, height = 280 }) => {
+  const ref = useRef(null);
+  const chart = useRef(null);
+
+  useEffect(() => {
+    if (!ref.current || !config) return;
+    if (chart.current) chart.current.destroy();
+    chart.current = new Chart(ref.current, config);
+    return () => chart.current && chart.current.destroy();
+  }, [config]);
+
+  return <canvas ref={ref} style={{ height, maxHeight: height }} />;
+};
+
+const LoadingScreen = () => (
+  <div className="center-screen">
+    <div className="spinner" />
+    <p style={{ color:'var(--text-secondary)', fontSize:'0.8125rem' }}>Loading NPS dashboard…</p>
+  </div>
+);
+
+const ErrorScreen = ({ message }) => (
+  <div className="center-screen">
+    <div className="err-title">Failed to load NPS</div>
+    <div className="err-msg">{message}</div>
+    <div className="err-msg" style={{ marginTop: 8 }}>
+      This page reads through a shared dashboard service and Supabase Edge Function so the browser never depends on raw table access.
+    </div>
+  </div>
+);
+
+const EmptyScreen = () => (
+  <div className="center-screen">
+    <div className="err-title">No NPS data found</div>
+    <div className="err-msg">The shared dashboard service returned an empty NPS payload.</div>
+  </div>
+);
+
+const KPICard = ({ label, value, sub, sign }) => (
+  <div className="kpi-card">
+    <div className="kpi-label">{label}</div>
+    <div className={`kpi-value${sign ? ` ${sign}` : ''}`}>{value}</div>
+    {sub && <div className="kpi-sub">{sub}</div>}
+  </div>
+);
+
+const GroupBadge = ({ value }) => (
+  <span className={`nps-badge ${groupClass(value)}`}>{value}</span>
+);
+
+const ValidityBadge = ({ value }) => (
+  <span className={`nps-badge ${value ? 'promoter' : 'neutral'}`}>{value ? 'Valid for NPS' : 'Excluded'}</span>
+);
+
+const polarToCartesian = (cx, cy, radius, angle) => {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
+};
+
+const describeArc = (cx, cy, radius, startAngle, endAngle) => {
+  const start = polarToCartesian(cx, cy, radius, endAngle);
+  const end = polarToCartesian(cx, cy, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
+};
+
+const NpsGauge = ({ score, totalResponses }) => {
+  const normalizedScore = Math.max(-100, Math.min(100, Number(score) || 0));
+  const needleAngle = -90 + ((normalizedScore + 100) / 200) * 180;
+  const segments = [
+    { start: -90, end: -63, color: '#FF1F1F' },
+    { start: -61, end: -34, color: '#FF5722' },
+    { start: -32, end: -5, color: '#FF9800' },
+    { start: -3, end: 24, color: '#FFC107' },
+    { start: 26, end: 53, color: '#C0CA33' },
+    { start: 55, end: 82, color: '#66BB6A' },
+    { start: 84, end: 90, color: '#0F8A5F' },
+  ];
+
+  return (
+    <div className="nps-gauge-wrap">
+      <div className="nps-gauge-score-block">
+        <div className={`nps-gauge-score ${statusClass(score)}`}>{fmt.score(score)}</div>
+        <div className="nps-gauge-score-label">NPS</div>
+        <div className="nps-gauge-score-meta">{fmt.number(totalResponses)} valid responses</div>
+      </div>
+      <svg viewBox="0 0 240 150" className="nps-gauge-svg" aria-hidden="true">
+        {segments.map((segment) => (
+          <path
+            key={`${segment.start}-${segment.end}`}
+            d={describeArc(120, 120, 86, segment.start, segment.end)}
+            fill="none"
+            stroke={segment.color}
+            strokeWidth="18"
+            strokeLinecap="round"
+          />
+        ))}
+        <line
+          x1="120"
+          y1="120"
+          x2="120"
+          y2="50"
+          stroke="#8F95A7"
+          strokeWidth="4"
+          strokeLinecap="round"
+          transform={`rotate(${needleAngle} 120 120)`}
+        />
+        <circle cx="120" cy="120" r="10" fill="#C9CEDD" />
+        <circle cx="120" cy="120" r="5" fill="#7C849A" />
+      </svg>
+    </div>
+  );
+};
+
+const HeadlineInsightCard = ({ summary, insight }) => (
+  <article className="chart-card nps-headline-card">
+    <div className="chart-title">Headline NPS</div>
+    <div className="nps-headline-layout">
+      <NpsGauge
+        score={summary.npsScore}
+        totalResponses={summary.totalResponses}
+      />
+      <div className="nps-headline-copy">
+        <p>{insight}</p>
+      </div>
+    </div>
+  </article>
+);
+
+const NpsMetricStrip = ({ summary }) => (
+  <section className="nps-detail-grid nps-detail-strip">
+    <div className="nps-mini-kpi promoter">
+      <span>Promoters</span>
+      <strong>{fmt.number(summary.promoters)}</strong>
+    </div>
+    <div className="nps-mini-kpi passive">
+      <span>Passives</span>
+      <strong>{fmt.number(summary.passives)}</strong>
+    </div>
+    <div className="nps-mini-kpi detractor">
+      <span>Detractors</span>
+      <strong>{fmt.number(summary.detractors)}</strong>
+    </div>
+    <div className="compact-stat">
+      <span className="compact-stat-label">Headline month</span>
+      <div className="compact-stat-value">{fmt.monthLabel(summary.headlineMonth)}</div>
+    </div>
+    <div className="compact-stat">
+      <span className="compact-stat-label">Scope</span>
+      <div className="compact-stat-value">{summary.segment} · {summary.collectionVersion}</div>
+    </div>
+    <div className="compact-stat">
+      <span className="compact-stat-label">Change MoM</span>
+      <div className={`compact-stat-value ${deltaClass(summary.monthOverMonthDelta)}`}>{fmt.delta(summary.monthOverMonthDelta)}</div>
+    </div>
+  </section>
+);
+
+const SegmentCard = ({ item, leader }) => (
+  <article className={`nps-segment-card${leader ? ' leader' : ''}`}>
+    <div className="nps-segment-top">
+      <span className="nps-segment-label">{item.segment}</span>
+      {leader && <span className="status-pill live">Highest</span>}
+    </div>
+    <div className={`nps-segment-score ${statusClass(item.npsScore)}`}>{fmt.score(item.npsScore)}</div>
+    <div className="nps-segment-meta">{fmt.number(item.totalResponses)} valid responses</div>
+  </article>
+);
+
+const CoverageCard = ({ label, value, total }) => {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <article className="nps-coverage-card">
+      <div className="nps-coverage-top">
+        <span>{label}</span>
+        <strong>{pct}%</strong>
+      </div>
+      <div className="nps-coverage-bar">
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <div className="nps-coverage-meta">{fmt.number(value)} of {fmt.number(total)} responses</div>
+    </article>
+  );
+};
+
+const ExplorerRow = ({ row, expanded, onToggle }) => (
+  <>
+    <tr className={`gap-row${expanded ? ' open' : ''}`} onClick={() => onToggle(row.responseId)}>
+      <td className="expand-cell">{expanded ? '−' : '+'}</td>
+      <td>{fmt.monthLabel(row.responseMonth)}</td>
+      <td>{normalizeRespondentType(row.respondentType)}</td>
+      <td className="news-table-headline">
+        <strong>{row.clientName || 'No client captured'}</strong>
+        <span>{row.respondentName || 'Anonymous / missing name'}</span>
+      </td>
+      <td className="r">{fmt.score(row.npsScore)}</td>
+      <td><GroupBadge value={row.npsGroup} /></td>
+      <td>{row.relevantDepartment || '—'}</td>
+      <td className="nps-reason-cell">{row.initialReasonProvided || 'No written reason captured yet.'}</td>
+    </tr>
+    {expanded && (
+      <tr>
+        <td className="detail-td" colSpan="8">
+          <div className="detail-panel">
+            <div className="detail-sub-hdr">Response detail</div>
+            <div className="feed-item-details">
+              <div className="feed-detail-card">
+                <span className="feed-detail-label">Response date</span>
+                <div className="feed-detail-value">{fmt.date(row.responseDate)}</div>
+              </div>
+              <div className="feed-detail-card">
+                <span className="feed-detail-label">Collection version</span>
+                <div className="feed-detail-value">{row.collectionVersion || 'all'}</div>
+              </div>
+              <div className="feed-detail-card">
+                <span className="feed-detail-label">Country</span>
+                <div className="feed-detail-value">{row.countryOfEmployment || 'Not captured'}</div>
+              </div>
+              <div className="feed-detail-card">
+                <span className="feed-detail-label">Grouping audit</span>
+                <div className="feed-detail-value">{row.groupingMismatch ? 'Spreadsheet grouping differs from recalculated group' : 'No grouping mismatch detected'}</div>
+              </div>
+              <div className="feed-detail-card">
+                <span className="feed-detail-label">Validity</span>
+                <div className="feed-detail-value"><ValidityBadge value={row.isValidForNps} /></div>
+              </div>
+              <div className="feed-detail-card feed-item-insight">
+                <span className="feed-detail-label">Full reason</span>
+                <div className="feed-detail-value">{row.initialReasonProvided || 'No additional free-text reason was stored for this response.'}</div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    )}
+  </>
+);
+
+const App = () => {
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [collectionVersion, setCollectionVersion] = useState('all');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [showAllMonths, setShowAllMonths] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedType, setSelectedType] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [clientQuery, setClientQuery] = useState('');
+  const [expandedId, setExpandedId] = useState('');
+  const theme = useDashboardTheme();
+  const chartPalette = useMemo(() => getChartPalette(), [theme]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError('');
+
+      const cached = readCache(collectionVersion);
+      if (cached) {
+        setDashboard(cached);
+        setLoading(false);
+      }
+
+      try {
+        if (!window.dashboardApi || typeof window.dashboardApi.getNpsDashboard !== 'function') {
+          throw new Error('The shared dashboard service is not available in the browser yet.');
+        }
+
+        const payload = await window.dashboardApi.getNpsDashboard({
+          collectionVersion,
+          segment: 'Total',
+          limit: 100,
+        });
+
+        setDashboard(payload);
+        writeCache(collectionVersion, payload);
+      } catch (e) {
+        if (!cached) setError(e.message || String(e));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [collectionVersion]);
+
+  useEffect(() => {
+    setExpandedId('');
+  }, [selectedMonth, selectedType, selectedGroup, clientQuery, collectionVersion]);
+
+  const months = dashboard?.metadata?.availableResponseMonths || [];
+
+  const filteredResponses = useMemo(() => {
+    const rows = dashboard?.responseExplorer || [];
+    const query = clientQuery.trim().toLowerCase();
+
+    return rows.filter((row) => {
+      if (selectedMonth && row.responseMonth !== selectedMonth) return false;
+      if (selectedType && normalizeRespondentType(row.respondentType) !== selectedType) return false;
+      if (selectedGroup && normalizeGroup(row.npsGroup) !== selectedGroup) return false;
+      if (query) {
+        const haystack = `${row.clientName} ${row.respondentName}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+  }, [dashboard, selectedMonth, selectedType, selectedGroup, clientQuery]);
+
+  const insight = useMemo(() => {
+    if (!dashboard) return '';
+
+    const delta = dashboard.summary.monthOverMonthDelta;
+    const employee = dashboard.segments.find((item) => item.segment === 'Employee');
+    const client = dashboard.segments.find((item) => item.segment === 'Client');
+    const deltaText = delta == null
+      ? 'The first headline month has no prior comparison month yet.'
+      : delta > 0
+      ? `NPS is up ${fmt.delta(delta)} vs the prior month.`
+      : delta < 0
+      ? `NPS is down ${fmt.delta(delta)} vs the prior month.`
+      : 'NPS is flat versus the prior month.';
+
+    if (!employee || !client) return deltaText;
+
+    const segmentGap = Number(employee.npsScore) - Number(client.npsScore);
+    const gapText = segmentGap >= 0
+      ? `Employee leads Client by ${fmt.score(Math.abs(segmentGap))} pts.`
+      : `Client leads Employee by ${fmt.score(Math.abs(segmentGap))} pts.`;
+
+    return `${deltaText} ${gapText}`;
+  }, [dashboard]);
+
+  const trendChart = useMemo(() => {
+    if (!dashboard) return null;
+
+    return {
+      type: 'line',
+      data: {
+        labels: dashboard.trend.map((item) => fmt.monthLabel(item.month)),
+        datasets: [
+          {
+            label: 'NPS score',
+            data: dashboard.trend.map((item) => item.npsScore),
+            borderColor: chartPalette.chartLine,
+            backgroundColor: chartPalette.chartFill,
+            tension: 0.32,
+            pointRadius: 4,
+            fill: true,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            min: -100,
+            max: 100,
+            ticks: { color: chartPalette.chartText },
+            grid: { color: chartPalette.chartGrid },
+          },
+          x: {
+            ticks: { color: chartPalette.chartText },
+            grid: { color: chartPalette.chartGrid },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+        },
+      },
+    };
+  }, [dashboard, chartPalette]);
+
+  const mixChart = useMemo(() => {
+    if (!dashboard) return null;
+
+    return {
+      type: 'bar',
+      data: {
+        labels: dashboard.trend.map((item) => fmt.monthLabel(item.month)),
+        datasets: [
+          {
+            label: 'Promoters',
+            data: dashboard.trend.map((item) => item.promoters),
+            backgroundColor: '#66BB6A',
+          },
+          {
+            label: 'Passives',
+            data: dashboard.trend.map((item) => item.passives),
+            backgroundColor: '#FFA726',
+          },
+          {
+            label: 'Detractors',
+            data: dashboard.trend.map((item) => item.detractors),
+            backgroundColor: '#F44336',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { color: chartPalette.chartText },
+            grid: { display: false },
+          },
+          y: {
+            stacked: true,
+            ticks: { color: chartPalette.chartText },
+            grid: { color: chartPalette.chartGrid },
+          },
+        },
+        plugins: {
+          legend: {
+            labels: { color: chartPalette.chartText, boxWidth: 12 },
+          },
+        },
+      },
+    };
+  }, [dashboard, chartPalette]);
+
+  const respondentTypeChart = useMemo(() => {
+    if (!dashboard) return null;
+
+    return {
+      type: 'doughnut',
+      data: {
+        labels: dashboard.distribution.respondentTypes.map((item) => item.respondentType),
+        datasets: [
+          {
+            data: dashboard.distribution.respondentTypes.map((item) => item.responses),
+            backgroundColor: ['#5110DD', '#36B1FF', '#AF91EF', '#FFA726'],
+            borderWidth: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: chartPalette.chartText, boxWidth: 12 },
+          },
+        },
+      },
+    };
+  }, [dashboard, chartPalette]);
+
+  const monthlyBreakdownRows = useMemo(() => {
+    if (!dashboard) return [];
+
+    const ascRows = [...dashboard.trend].sort((left, right) => left.month.localeCompare(right.month));
+    const withMetrics = ascRows.map((item, index, rows) => {
+      const previous = index > 0 ? rows[index - 1] : null;
+      const priorFour = rows.slice(Math.max(0, index - 4), index);
+      const averageOf = (key) => priorFour.length === 4
+        ? priorFour.reduce((sum, row) => sum + Number(row[key] || 0), 0) / 4
+        : null;
+
+      return {
+        ...item,
+        npsMoM: previous ? Number(item.npsScore) - Number(previous.npsScore) : null,
+        npsAvgL4M: averageOf('npsScore'),
+        promotersMoM: previous ? Number(item.promoters) - Number(previous.promoters) : null,
+        promotersAvgL4M: averageOf('promoters'),
+        passivesMoM: previous ? Number(item.passives) - Number(previous.passives) : null,
+        passivesAvgL4M: averageOf('passives'),
+        detractorsMoM: previous ? Number(item.detractors) - Number(previous.detractors) : null,
+        detractorsAvgL4M: averageOf('detractors'),
+      };
+    });
+
+    return withMetrics.reverse();
+  }, [dashboard]);
+
+  const visibleMonthlyBreakdownRows = useMemo(() => (
+    showAllMonths
+      ? monthlyBreakdownRows
+      : dashboard?.metadata?.partialMonthObserved
+        ? monthlyBreakdownRows.filter((row) => row.month !== dashboard.metadata.latestObservedMonth).slice(0, 4)
+        : monthlyBreakdownRows.slice(0, 4)
+  ), [monthlyBreakdownRows, showAllMonths, dashboard]);
+
+  if (loading && !dashboard) {
+    return <LoadingScreen />;
+  }
+
+  if (error && !dashboard) {
+    return <ErrorScreen message={error} />;
+  }
+
+  if (!dashboard || !dashboard.summary?.headlineMonth) {
+    return <EmptyScreen />;
+  }
+
+  const sidebar = { __html: window.renderSidebar('nps') };
+  const leadingSegment = [...dashboard.segments].sort((a, b) => b.npsScore - a.npsScore)[0]?.segment;
+  const employeeSegment = dashboard.segments.find((item) => item.segment === 'Employee');
+  const clientSegment = dashboard.segments.find((item) => item.segment === 'Client');
+  const segmentGap = employeeSegment && clientSegment
+    ? Number(employeeSegment.npsScore || 0) - Number(clientSegment.npsScore || 0)
+    : null;
+
+  return (
+    <div className="shell">
+      <div style={{ display:'contents' }} dangerouslySetInnerHTML={sidebar} />
+      <main className="app">
+        <header className="app-header">
+          <div className="header-left">
+            <div className="logo">NPS</div>
+            <div className="header-sub">Manager-ready view of automated NPS reporting</div>
+          </div>
+          <a className="header-link" href="index.html">Back to home</a>
+        </header>
+
+        <section className="app-main">
+          <div className="tab-content">
+            <section className="page-hero compact">
+              <div>
+                <div className="eyebrow">Live dashboard</div>
+                <h1 className="page-hero-title">NPS</h1>
+                <p className="page-hero-copy">
+                  Review automated monthly NPS, compare employee and client sentiment, and understand the score movement through a trusted data pipeline.
+                </p>
+              </div>
+              <div className="hero-stat-block">
+                <span className="status-pill live">Live</span>
+              <div className="hero-stat-kicker">Data source</div>
+                <div className="hero-stat-value">{NPS_ENV === 'local' ? 'Local mock' : 'Dashboard API'}</div>
+                <div className="hero-stat-meta">
+                  {fmt.number(dashboard.dataQuality.totalResponses)} normalized responses · {fmt.monthLabel(dashboard.summary.headlineMonth)} headline
+                </div>
+              </div>
+            </section>
+
+            <section className="tab-nav" style={{ marginBottom: 18 }}>
+              <button className={`tab-btn${activeTab === 'overview' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('overview')}>Overview</button>
+              <button className={`tab-btn${activeTab === 'explorer' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('explorer')}>Response Explorer</button>
+            </section>
+
+            {activeTab === 'overview' && (
+              <>
+            <section className="section-header nps-toolbar">
+              <div>
+                <h2 className="section-title">Overview</h2>
+                <p className="section-sub">
+                  {dashboard.metadata.partialMonthObserved
+                    ? `Headline view uses ${fmt.monthLabel(dashboard.summary.headlineMonth)} because ${fmt.monthLabel(dashboard.metadata.latestObservedMonth)} is still partial.`
+                    : 'Headline view uses the latest available month in the trusted reporting pipeline.'}
+                </p>
+              </div>
+              <div className="filter-group nps-toolbar-control">
+                <label htmlFor="collection-version">Collection version</label>
+                <select
+                  id="collection-version"
+                  className="f-select"
+                  value={collectionVersion}
+                  onChange={(event) => setCollectionVersion(event.target.value)}
+                >
+                  {(dashboard.metadata.availableCollectionVersions || ['all']).map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+            </section>
+
+            <section className="kpi-grid">
+              <KPICard
+                label="Headline NPS"
+                value={fmt.score(dashboard.summary.npsScore)}
+                sub={`${dashboard.summary.segment} segment`}
+                sign={statusClass(dashboard.summary.npsScore)}
+              />
+              <KPICard
+                label="Change MoM"
+                value={fmt.delta(dashboard.summary.monthOverMonthDelta)}
+                sub={dashboard.summary.previousMonthNpsScore == null ? 'No prior month available' : `Prev. month ${fmt.score(dashboard.summary.previousMonthNpsScore)}`}
+                sign={deltaClass(dashboard.summary.monthOverMonthDelta)}
+              />
+              <KPICard
+                label="Valid responses"
+                value={fmt.number(dashboard.summary.totalResponses)}
+                sub={fmt.monthLabel(dashboard.summary.headlineMonth)}
+              />
+              <KPICard
+                label="Employee vs client gap"
+                value={segmentGap == null ? '---' : fmt.delta(segmentGap)}
+                sub={employeeSegment && clientSegment
+                  ? `Employee ${fmt.score(employeeSegment.npsScore)} · Client ${fmt.score(clientSegment.npsScore)}`
+                  : 'Not enough segment data'}
+                sign={deltaClass(segmentGap)}
+              />
+            </section>
+
+            <NpsMetricStrip summary={dashboard.summary} />
+
+            <section className="charts-row nps-primary-row">
+              <HeadlineInsightCard summary={dashboard.summary} insight={insight} />
+              <article className="chart-card nps-chart-main">
+                <div className="chart-title">Monthly NPS trend</div>
+                <ChartCanvas config={trendChart} height={280} />
+              </article>
+            </section>
+
+            <section className="charts-row">
+              <article className="chart-card nps-chart-main">
+                <div className="chart-title">Promoter, passive and detractor mix by month</div>
+                <ChartCanvas config={mixChart} height={320} />
+              </article>
+              <article className="chart-card nps-chart-side">
+                <div className="chart-title">Respondent mix</div>
+                <ChartCanvas config={respondentTypeChart} height={320} />
+              </article>
+            </section>
+
+            <section className="section-header">
+              <div>
+                <h2 className="section-title">Segment comparison</h2>
+                <p className="section-sub">Compare the latest fuller month across Total, Employee and Client sentiment.</p>
+              </div>
+            </section>
+
+            <section className="nps-segment-grid">
+              {dashboard.segments.map((item) => (
+                <SegmentCard
+                  key={item.segment}
+                  item={item}
+                  leader={item.segment === leadingSegment}
+                />
+              ))}
+            </section>
+
+            <section className="info-strip">
+              <div className="info-strip-item">
+                <span className="info-strip-label">Why trust this</span>
+                <span className="info-strip-value">Scores are recalculated from actual response dates and normalized response groups.</span>
+              </div>
+              <div className="info-strip-item">
+                <span className="info-strip-label">How NPS is calculated</span>
+                <span className="info-strip-value">% Promoters minus % Detractors, multiplied by 100.</span>
+              </div>
+              <div className="info-strip-item">
+                <span className="info-strip-label">Important caveat</span>
+                <span className="info-strip-value">
+                  {dashboard.metadata.partialMonthObserved
+                    ? `Latest observed month ${fmt.monthLabel(dashboard.metadata.latestObservedMonth)} is partial, and response-rate denominator fields are not yet available.`
+                    : 'The current schema does not yet include response-rate denominator fields.'}
+                </span>
+              </div>
+            </section>
+
+            <section className="section-header">
+              <div>
+                <h2 className="section-title">Monthly breakdown</h2>
+                <p className="section-sub">Numeric detail behind the overview, showing the latest fuller four months first.</p>
+              </div>
+              <button className="action-btn secondary" type="button" onClick={() => setShowAllMonths((current) => !current)}>
+                {showAllMonths ? 'Show latest 4 months' : 'Show more months'}
+              </button>
+            </section>
+
+            <section className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th className="r">NPS</th>
+                    <th className="r">Change MoM</th>
+                    <th className="r">Avg. L4M</th>
+                    <th className="r">Promoters</th>
+                    <th className="r">Passives</th>
+                    <th className="r">Detractors</th>
+                    <th className="r">Total responses</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleMonthlyBreakdownRows.map((row) => (
+                    <tr key={row.month}>
+                      <td>
+                        <span className="gap-name">{fmt.monthLabel(row.month)}</span>
+                        {dashboard.metadata.latestObservedMonth === row.month && dashboard.metadata.partialMonthObserved && (
+                          <span className="news-pill" style={{ marginLeft: 8 }}>Partial month</span>
+                        )}
+                      </td>
+                      <td className={`r ${statusClass(row.npsScore)}`}>{fmt.score(row.npsScore)}</td>
+                      <td className={`r ${deltaClass(row.npsMoM)}`}>{fmt.delta(row.npsMoM)}</td>
+                      <td className={`r ${statusClass(row.npsAvgL4M)}`}>{row.npsAvgL4M == null ? '---' : fmt.score(row.npsAvgL4M)}</td>
+                      <td className="r pos">{fmt.number(row.promoters)}</td>
+                      <td className="r">{fmt.number(row.passives)}</td>
+                      <td className="r neg">{fmt.number(row.detractors)}</td>
+                      <td className="r">{fmt.number(row.totalResponses)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+
+            <section className="section-header">
+              <div>
+                <h2 className="section-title">Coverage snapshot</h2>
+                <p className="section-sub">These fields support qualitative drill-downs, but the core score and trend are already reliable.</p>
+              </div>
+            </section>
+
+            <section className="nps-coverage-grid">
+              <CoverageCard label="Written reasons" value={dashboard.dataQuality.rowsWithReason} total={dashboard.dataQuality.totalResponses} />
+              <CoverageCard label="Classification" value={dashboard.dataQuality.rowsWithClassification} total={dashboard.dataQuality.totalResponses} />
+              <CoverageCard label="Sub-classification" value={dashboard.dataQuality.rowsWithSubClassification} total={dashboard.dataQuality.totalResponses} />
+              <CoverageCard label="Client name" value={dashboard.dataQuality.rowsWithClientName} total={dashboard.dataQuality.totalResponses} />
+              <CoverageCard label="Country of employment" value={dashboard.dataQuality.rowsWithCountry} total={dashboard.dataQuality.totalResponses} />
+            </section>
+              </>
+            )}
+
+            {activeTab === 'explorer' && (
+              <>
+            <section className="section-header">
+              <div>
+                <h2 className="section-title">Response explorer</h2>
+                <p className="section-sub">Trace the headline score back to real responses without exposing raw database tables in the browser.</p>
+              </div>
+            </section>
+
+            <section className="filter-panel">
+              <div className="filter-group">
+                <label htmlFor="response-month">Month</label>
+                <select id="response-month" className="f-select" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+                  <option value="">All visible months</option>
+                  {months.map((item) => (
+                    <option key={item} value={item}>{fmt.monthLabel(item)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="filter-group">
+                <label htmlFor="respondent-type">Respondent type</label>
+                <select id="respondent-type" className="f-select" value={selectedType} onChange={(event) => setSelectedType(event.target.value)}>
+                  <option value="">All types</option>
+                  <option value="Employee">Employee</option>
+                  <option value="Client">Client</option>
+                  <option value="Unknown">Unknown</option>
+                </select>
+              </div>
+              <div className="filter-group">
+                <label htmlFor="nps-group">NPS group</label>
+                <select id="nps-group" className="f-select" value={selectedGroup} onChange={(event) => setSelectedGroup(event.target.value)}>
+                  <option value="">All groups</option>
+                  <option value="Promoter">Promoter</option>
+                  <option value="Passive">Passive</option>
+                  <option value="Detractor">Detractor</option>
+                </select>
+              </div>
+              <div className="filter-group" style={{ minWidth: 220 }}>
+                <label htmlFor="client-query">Client search</label>
+                <input
+                  id="client-query"
+                  className="f-input"
+                  type="search"
+                  placeholder="Search client or respondent"
+                  value={clientQuery}
+                  onChange={(event) => setClientQuery(event.target.value)}
+                />
+              </div>
+              <div className="filter-group">
+                <label>Visible responses</label>
+                <div className="compact-stat">
+                  <span className="compact-stat-label">Rows</span>
+                  <div className="compact-stat-value">{fmt.number(filteredResponses.length)}</div>
+                  <div className="compact-stat-meta">Filtered inside a capped, auditable response sample</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th />
+                    <th>Month</th>
+                    <th>Type</th>
+                    <th>Client / respondent</th>
+                    <th className="r">Score</th>
+                    <th>Group</th>
+                    <th>Department</th>
+                    <th>Reason preview</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredResponses.length ? filteredResponses.map((row) => (
+                    <ExplorerRow
+                      key={row.responseId}
+                      row={row}
+                      expanded={expandedId === row.responseId}
+                      onToggle={(id) => setExpandedId((current) => current === id ? '' : id)}
+                    />
+                  )) : (
+                    <tr>
+                      <td colSpan="8">
+                        <div className="detail-panel">
+                          <div className="empty-inline">No responses match the current explorer filters.</div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </section>
+              </>
+            )}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

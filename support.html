@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product One | Support</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script>
+  window.__PUBLIC_CONFIG__ = {
+    appEnv: 'production',
+    apiBaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co/functions/v1',
+  };
+</script>
+<script src="dashboard-pages.js"></script>
+<script type="module" src="src/services/dashboard-api.browser.js"></script>
+<script type="text/babel">
+const { useEffect, useMemo, useRef, useState } = React;
+
+const SUPPORT_ENV = window.__PUBLIC_CONFIG__?.appEnv ?? 'local';
+const SUPPORT_CACHE_PREFIX = `dashboard.support.v1.${SUPPORT_ENV}`;
+const CHART_COLORS = ['#5110DD', '#36B1FF', '#66BB6A', '#FFA726', '#AF91EF', '#F44336', '#29B6F6', '#7E57C2'];
+
+const fmt = {
+  number: value => new Intl.NumberFormat('en-US').format(Math.round(Number(value) || 0)),
+  pct: value => value == null ? '---' : `${(Number(value) * 100).toFixed(1).replace('.0', '')}%`,
+  date: value => {
+    if (!value) return '---';
+    const parsed = new Date(value.includes('T') ? value : `${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleDateString('en-GB', { year:'numeric', month:'short', day:'2-digit' });
+  },
+  month: value => {
+    if (!value || value === 'Unknown') return 'Unknown';
+    const parsed = new Date(`${value}-01T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleDateString('en-GB', { year:'numeric', month:'short' });
+  },
+};
+
+const filterKey = filters => `${SUPPORT_CACHE_PREFIX}.${JSON.stringify(filters)}`;
+
+const readCache = filters => {
+  try {
+    const raw = sessionStorage.getItem(filterKey(filters));
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const writeCache = (filters, payload) => {
+  try {
+    sessionStorage.setItem(filterKey(filters), JSON.stringify(payload));
+  } catch (_) {
+    // Ignore storage failures and rely on fresh API results.
+  }
+};
+
+const useDashboardTheme = () => {
+  const [theme, setTheme] = useState(() => window.getDashboardTheme ? window.getDashboardTheme() : 'light');
+
+  useEffect(() => {
+    const handleThemeChange = event => setTheme(event.detail?.theme || (window.getDashboardTheme ? window.getDashboardTheme() : 'light'));
+    window.addEventListener('dashboard-theme-change', handleThemeChange);
+    return () => window.removeEventListener('dashboard-theme-change', handleThemeChange);
+  }, []);
+
+  return theme;
+};
+
+const getChartPalette = () => (
+  window.getDashboardThemePalette
+    ? window.getDashboardThemePalette()
+    : {
+        chartText: '#49454F',
+        chartGrid: '#E9E9EA',
+        chartBar: '#5110DDAA',
+        chartBarBorder: '#5110DD',
+        chartLine: '#36B1FF',
+      }
+);
+
+const ChartCanvas = ({ config, height = 280 }) => {
+  const ref = useRef(null);
+  const chart = useRef(null);
+
+  useEffect(() => {
+    if (!ref.current || !config) return;
+    if (chart.current) chart.current.destroy();
+    chart.current = new Chart(ref.current, config);
+    return () => chart.current && chart.current.destroy();
+  }, [config]);
+
+  return <canvas ref={ref} style={{ height, maxHeight: height }} />;
+};
+
+const LoadingScreen = () => (
+  <div className="center-screen">
+    <div className="spinner" />
+    <p style={{ color:'var(--text-secondary)', fontSize:'0.8125rem' }}>Loading support dashboard...</p>
+  </div>
+);
+
+const ErrorScreen = ({ message }) => (
+  <div className="center-screen">
+    <div className="err-title">Failed to load support dashboard</div>
+    <div className="err-msg">{message}</div>
+    <div className="err-msg" style={{ marginTop: 8 }}>
+      This page reads support data through a server-side dashboard boundary and only receives sanitized aggregate context.
+    </div>
+  </div>
+);
+
+const EmptyScreen = () => (
+  <div className="center-screen">
+    <div className="err-title">No support data found</div>
+    <div className="err-msg">The support dashboard service returned an empty payload for the selected filters.</div>
+  </div>
+);
+
+const KPICard = ({ label, value, sub, sign }) => (
+  <div className="kpi-card">
+    <div className="kpi-label">{label}</div>
+    <div className={`kpi-value${sign ? ` ${sign}` : ''}`}>{value}</div>
+    {sub && <div className="kpi-sub">{sub}</div>}
+  </div>
+);
+
+const SeverityBadge = ({ value }) => {
+  const normalized = String(value || 'Unknown').toLowerCase();
+  const cls = normalized === 'l4' ? 'detractor' : normalized === 'l3' ? 'passive' : normalized === 'l2' ? 'neutral' : 'promoter';
+  return <span className={`nps-badge ${cls}`}>{value || 'Unknown'}</span>;
+};
+
+const DistributionTable = ({ rows, label = 'Label' }) => (
+  <div className="table-wrap">
+    <table className="data-table">
+      <thead>
+        <tr>
+          <th>{label}</th>
+          <th className="r">Tickets</th>
+          <th className="r">Share</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(row => (
+          <tr key={`${label}-${row.value}`}>
+            <td>{row.label}</td>
+            <td className="r">{fmt.number(row.count)}</td>
+            <td className="r">{fmt.pct(row.pct)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const InsightCard = ({ item }) => (
+  <article className="support-insight-card">
+    <div className="support-insight-head">
+      <div>
+        <div className="support-insight-title">Ticket {item.ticketId}</div>
+        <div className="support-insight-meta">
+          <span>{fmt.date(item.ticketCreatedAt)}</span>
+          <span>{item.categoryLabel}</span>
+          <span>{item.country}</span>
+        </div>
+      </div>
+      <SeverityBadge value={item.severity} />
+    </div>
+    <p className="support-insight-copy">{item.cleanSummary || 'No sanitized summary available.'}</p>
+    {item.requesterIntent && (
+      <div className="support-intent-box">
+        <span>Requester intent</span>
+        <strong>{item.requesterIntent}</strong>
+      </div>
+    )}
+    <div className="support-insight-foot">
+      <span className="code-pill">{item.companyId}</span>
+      <span className="news-pill">{item.status}</span>
+      {item.flags.slice(0, 3).map(flag => <span key={`${item.ticketId}-${flag}`} className="news-pill">{flag.replace(/_/g, ' ')}</span>)}
+    </div>
+  </article>
+);
+
+const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
+  const theme = useDashboardTheme();
+  const chartPalette = useMemo(() => getChartPalette(), [theme]);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const filterOptions = dashboard.metadata.availableFilters || {};
+
+  const trendChart = useMemo(() => ({
+    type: 'bar',
+    data: {
+      labels: dashboard.trend.map(item => fmt.month(item.month)),
+      datasets: [
+        {
+          label: 'Tickets',
+          data: dashboard.trend.map(item => item.ticketCount),
+          backgroundColor: chartPalette.chartBar,
+          borderColor: chartPalette.chartBarBorder,
+          borderWidth: 1.5,
+          borderRadius: 8,
+        },
+        {
+          label: 'L4',
+          data: dashboard.trend.map(item => item.l4Tickets),
+          backgroundColor: '#F44336AA',
+          borderColor: '#F44336',
+          borderWidth: 1.5,
+          borderRadius: 8,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: chartPalette.chartText, font:{ family:'Poppins', size:11 }, boxWidth: 12 } },
+      },
+      scales: {
+        x: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 } }, grid: { display: false } },
+        y: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 }, precision: 0 }, grid: { color: chartPalette.chartGrid } },
+      },
+    },
+  }), [dashboard, chartPalette]);
+
+  const categoryChart = useMemo(() => ({
+    type: 'doughnut',
+    data: {
+      labels: dashboard.distributions.categories.map(item => item.label),
+      datasets: [{
+        data: dashboard.distributions.categories.map(item => item.count),
+        backgroundColor: CHART_COLORS,
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: chartPalette.chartText, font:{ family:'Poppins', size:11 }, boxWidth: 12 },
+        },
+      },
+    },
+  }), [dashboard, chartPalette]);
+
+  const processFlagChart = useMemo(() => ({
+    type: 'bar',
+    data: {
+      labels: dashboard.distributions.processFlags.slice(0, 8).map(item => item.label),
+      datasets: [{
+        label: 'Tickets',
+        data: dashboard.distributions.processFlags.slice(0, 8).map(item => item.count),
+        backgroundColor: '#36B1FFAA',
+        borderColor: '#36B1FF',
+        borderWidth: 1.5,
+        borderRadius: 8,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 }, precision: 0 }, grid: { color: chartPalette.chartGrid } },
+        y: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 } }, grid: { display: false } },
+      },
+    },
+  }), [dashboard, chartPalette]);
+
+  const setFilter = (key, value) => {
+    setFilters(current => ({ ...current, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({ severity: '', category: '', requesterType: '', country: '' });
+  };
+
+  return (
+    <div className="tab-content">
+      <section className="page-hero compact">
+        <div>
+          <div className="eyebrow">Live dashboard</div>
+          <h1 className="page-hero-title">Support</h1>
+          <p className="page-hero-copy">
+            Track support workload, category pressure and AI-refined ticket context for internal operations teams without exposing raw comments or requester details.
+          </p>
+        </div>
+        <div className="hero-stat-block">
+          <span className="status-pill live">Live</span>
+          <div className="hero-stat-kicker">Default window</div>
+          <div className="hero-stat-value">Last 6 months</div>
+          <div className="hero-stat-meta">{fmt.date(dashboard.summary.windowStart)} to {fmt.date(dashboard.summary.windowEnd)}</div>
+        </div>
+      </section>
+
+      <section className="info-strip">
+        <div className="info-strip-item">
+          <span className="info-strip-label">Source model</span>
+          <span className="info-strip-value">AI context enriched with raw ticket operating fields</span>
+        </div>
+        <div className="info-strip-item">
+          <span className="info-strip-label">Privacy posture</span>
+          <span className="info-strip-value">Aggregates and sanitized summaries only</span>
+        </div>
+        <div className="info-strip-item">
+          <span className="info-strip-label">Coverage</span>
+          <span className="info-strip-value">{fmt.number(dashboard.dataQuality.aiContextRows)} AI rows · {fmt.pct(dashboard.dataQuality.aiCoveragePct)} of raw tickets</span>
+        </div>
+      </section>
+
+      <div className="product-news-tabs">
+        <div>
+          <h2 className="section-title">Support views</h2>
+          <p className="product-news-tabs-copy">Start with operational workload, then inspect support themes, hotspots and sanitized examples.</p>
+        </div>
+        <div className="tab-nav" role="tablist" aria-label="Support views">
+          <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('overview')}>Overview</button>
+          <button className={`tab-btn ${activeTab === 'themes' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('themes')}>Themes</button>
+          <button className={`tab-btn ${activeTab === 'insights' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('insights')}>Insights</button>
+        </div>
+      </div>
+
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Filters</h2>
+          <p className="section-sub">Filters reload aggregate support metrics through the same server-side dashboard endpoint.</p>
+        </div>
+        <button className="feed-item-toggle" type="button" onClick={clearFilters}>Clear filters</button>
+      </div>
+
+      <section className="filter-panel">
+        <div className="filter-group">
+          <label htmlFor="support-severity">Severity</label>
+          <select id="support-severity" className="f-select" value={filters.severity} onChange={event => setFilter('severity', event.target.value)}>
+            <option value="">All severities</option>
+            {(filterOptions.severities || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label htmlFor="support-category">Category</label>
+          <select id="support-category" className="f-select" value={filters.category} onChange={event => setFilter('category', event.target.value)}>
+            <option value="">All categories</option>
+            {(filterOptions.categories || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label htmlFor="support-requester">Requester</label>
+          <select id="support-requester" className="f-select" value={filters.requesterType} onChange={event => setFilter('requesterType', event.target.value)}>
+            <option value="">All requesters</option>
+            {(filterOptions.requesterTypes || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label htmlFor="support-country">Country</label>
+          <select id="support-country" className="f-select" value={filters.country} onChange={event => setFilter('country', event.target.value)}>
+            <option value="">All countries</option>
+            {(filterOptions.countries || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        <button className="feed-item-link" type="button" onClick={refresh}>Refresh</button>
+      </section>
+
+      <div className="kpi-grid">
+        <KPICard label="Tickets" value={fmt.number(dashboard.summary.totalTickets)} sub="Filtered AI context rows" />
+        <KPICard label="Open or pending" value={fmt.number(dashboard.summary.openOrPendingTickets)} sign={dashboard.summary.openOrPendingTickets > 0 ? 'neg' : 'pos'} />
+        <KPICard label="L4 severity" value={fmt.number(dashboard.summary.l4Tickets)} sign={dashboard.summary.l4Tickets > 0 ? 'neg' : 'pos'} />
+        <KPICard label="Bad satisfaction" value={fmt.number(dashboard.summary.badSatisfactionTickets)} sub={fmt.pct(dashboard.summary.badSatisfactionPct)} sign={dashboard.summary.badSatisfactionTickets > 0 ? 'neg' : 'pos'} />
+        <KPICard label="Internal handoff" value={fmt.number(dashboard.summary.requiresInternalHandoff)} />
+        <KPICard label="Client instruction" value={fmt.number(dashboard.summary.requiresClientInstruction)} />
+      </div>
+
+      {activeTab === 'overview' && (
+        <>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 2 }}>
+              <div className="chart-title">Monthly support volume</div>
+              {dashboard.trend.length ? <ChartCanvas config={trendChart} /> : <div className="no-data">No monthly support trend for these filters.</div>}
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Status mix</div>
+              <DistributionTable rows={dashboard.distributions.statuses} label="Status" />
+            </div>
+          </div>
+
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Severity mix</div>
+              <DistributionTable rows={dashboard.distributions.severities} label="Severity" />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Requester type</div>
+              <DistributionTable rows={dashboard.distributions.requesterTypes} label="Requester" />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Channel mix</div>
+              <DistributionTable rows={dashboard.distributions.channels} label="Channel" />
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'themes' && (
+        <>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Tickets by category</div>
+              {dashboard.distributions.categories.length ? <ChartCanvas config={categoryChart} /> : <div className="no-data">No category data for these filters.</div>}
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">AI process flags</div>
+              {dashboard.distributions.processFlags.length ? <ChartCanvas config={processFlagChart} /> : <div className="no-data">No process flag data for these filters.</div>}
+            </div>
+          </div>
+
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Top countries</div>
+              <DistributionTable rows={dashboard.distributions.countries} label="Country" />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Top subcategories</div>
+              <DistributionTable rows={dashboard.distributions.subcategories} label="Subcategory" />
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-title">Company ID hotspots</div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Company ID</th>
+                    <th className="r">Tickets</th>
+                    <th className="r">L4</th>
+                    <th className="r">Open / pending</th>
+                    <th className="r">Internal handoff</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.hotspots.companies.map(row => (
+                    <tr key={row.companyId}>
+                      <td><span className="code-pill">{row.companyId}</span></td>
+                      <td className="r">{fmt.number(row.ticketCount)}</td>
+                      <td className="r">{fmt.number(row.l4Tickets)}</td>
+                      <td className="r">{fmt.number(row.openOrPendingTickets)}</td>
+                      <td className="r">{fmt.number(row.requiresInternalHandoff)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'insights' && (
+        <>
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Sanitized AI insight feed</h2>
+              <p className="section-sub">Examples are selected server-side by severity, recency and process flags. Raw comments and requester details are not returned.</p>
+            </div>
+            <span className="header-link static">{fmt.number(dashboard.insights.length)} examples</span>
+          </div>
+
+          {dashboard.insights.length ? (
+            <section className="support-insight-grid">
+              {dashboard.insights.map(item => <InsightCard key={item.ticketId} item={item} />)}
+            </section>
+          ) : (
+            <div className="chart-card">
+              <div className="no-data">No sanitized insight examples match the current filters.</div>
+            </div>
+          )}
+
+          <div className="chart-card">
+            <div className="chart-title">Data quality notes</div>
+            <div className="support-note-grid">
+              <div className="support-note-card">
+                <span>Raw support rows</span>
+                <strong>{fmt.number(dashboard.dataQuality.rawTicketRows)}</strong>
+              </div>
+              <div className="support-note-card">
+                <span>AI context rows</span>
+                <strong>{fmt.number(dashboard.dataQuality.aiContextRows)}</strong>
+              </div>
+              <div className="support-note-card">
+                <span>AI coverage</span>
+                <strong>{fmt.pct(dashboard.dataQuality.aiCoveragePct)}</strong>
+              </div>
+            </div>
+            <ul className="support-note-list">
+              {dashboard.dataQuality.notes.map(note => <li key={note}>{note}</li>)}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const App = () => {
+  const [filters, setFilters] = useState({ severity: '', category: '', requesterType: '', country: '' });
+  const [dashboard, setDashboard] = useState(() => readCache({ severity: '', category: '', requesterType: '', country: '' }));
+  const [loading, setLoading] = useState(() => !readCache({ severity: '', category: '', requesterType: '', country: '' }));
+  const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setError('');
+        setLoading(true);
+
+        const cached = refreshKey === 0 ? readCache(filters) : null;
+        if (cached) {
+          setDashboard(cached);
+          setLoading(false);
+          return;
+        }
+
+        if (!window.dashboardApi || typeof window.dashboardApi.getSupportDashboard !== 'function') {
+          throw new Error('The shared dashboard service is not available in the browser yet.');
+        }
+
+        const payload = await window.dashboardApi.getSupportDashboard(filters);
+        setDashboard(payload);
+        writeCache(filters, payload);
+      } catch (event) {
+        setError(event.message || String(event));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [filters, refreshKey]);
+
+  const sidebar = { __html: window.renderSidebar('support') };
+
+  return (
+    <div className="shell">
+      <div style={{ display:'contents' }} dangerouslySetInnerHTML={sidebar} />
+      <main className="app">
+        <header className="app-header">
+          <div className="header-left">
+            <div className="logo">Support</div>
+            <div className="header-sub">Operations intelligence · sanitized AI context</div>
+          </div>
+          <a className="header-link" href="index.html">Back to home</a>
+        </header>
+        <section className="app-main">
+          {loading ? (
+            <LoadingScreen />
+          ) : error ? (
+            <ErrorScreen message={error} />
+          ) : !dashboard || dashboard.summary.totalTickets === 0 ? (
+            <EmptyScreen />
+          ) : (
+            <SupportDashboardView
+              dashboard={dashboard}
+              filters={filters}
+              setFilters={setFilters}
+              refresh={() => setRefreshKey(value => value + 1)}
+            />
+          )}
+        </section>
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

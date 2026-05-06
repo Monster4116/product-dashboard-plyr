@@ -116,6 +116,18 @@ window.DASHBOARD_PAGES = [
     description: 'Read the latest product, competitor, regulatory and AI signals in one searchable research feed with quick links back to the source.'
   },
   {
+    id: 'nps',
+    label: 'NPS',
+    title: 'NPS',
+    href: 'nps.html',
+    navGroup: 'Pages',
+    status: 'live',
+    accentClass: 'accent-secondary',
+    icon: 'NP',
+    cardTitle: 'NPS',
+    description: 'Track NPS trends, compare employee and client sentiment, and drill down from monthly scores into auditable response-level detail.'
+  },
+  {
     id: 'finance-adjustments',
     label: 'Finance Adjustments',
     title: 'Finance Adjustments',
@@ -138,6 +150,18 @@ window.DASHBOARD_PAGES = [
     icon: 'CH',
     cardTitle: 'Company health',
     description: 'Monitor company-level health scores, RAG coverage, support pressure and the drivers behind at-risk accounts.'
+  },
+  {
+    id: 'support',
+    label: 'Support',
+    title: 'Support',
+    href: 'support.html',
+    navGroup: 'Pages',
+    status: 'live',
+    accentClass: 'accent-info',
+    icon: 'SP',
+    cardTitle: 'Support',
+    description: 'Read support volume, severity, categories, requester mix and AI-refined ticket context through a sanitized operations dashboard.'
   },
   {
     id: 'actions',

@@ -7,16 +7,20 @@ import {
   mapDashboardSummary,
   mapFinanceAdjustment,
   mapList,
+  mapNpsDashboard,
   mapProductNewsItem,
   mapResearchItem,
+  mapSupportDashboard,
   mapSupportTicket,
 } from '../mappers/dashboard.mapper.js';
 import {
   actionsMockResponse,
   companyHealthMockResponse,
   financeAdjustmentsMockResponse,
+  npsDashboardMockResponse,
   productNewsMockResponse,
   runMockAction,
+  supportDashboardMockResponse,
 } from './mock-data/dashboard.mock.js';
 
 // Frontend pages should call these service functions instead of
@@ -44,6 +48,18 @@ const requestList = async (path, mapper) => {
   throw new Error(`Unexpected response shape from ${path}.`);
 };
 
+const buildQueryPath = (path, query = {}) => {
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') return;
+    params.set(key, String(value));
+  });
+
+  const queryString = params.toString();
+  return queryString ? `${path}?${queryString}` : path;
+};
+
 export const getDashboardSummary = async () => {
   const payload = await getJson('/dashboard/summary');
 
@@ -56,6 +72,20 @@ export const getDashboardSummary = async () => {
 
 export const getSupportTickets = async () =>
   requestList('/dashboard/support-tickets', mapSupportTicket);
+
+export const getSupportDashboard = async (query = {}) => {
+  if (isLocalMockMode) {
+    return mapSupportDashboard(supportDashboardMockResponse);
+  }
+
+  const payload = await getJson(buildQueryPath('/support-tickets', query));
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Unexpected response shape from /support-tickets.');
+  }
+
+  return mapSupportDashboard(payload);
+};
 
 export const getFinanceAdjustments = async () => {
   if (isLocalMockMode) {
@@ -79,6 +109,20 @@ export const getProductNews = async () => {
   }
 
   return requestList('/product-news', mapProductNewsItem);
+};
+
+export const getNpsDashboard = async (query = {}) => {
+  if (isLocalMockMode) {
+    return mapNpsDashboard(npsDashboardMockResponse);
+  }
+
+  const payload = await getJson(buildQueryPath('/nps', query));
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Unexpected response shape from /nps.');
+  }
+
+  return mapNpsDashboard(payload);
 };
 
 export const getAvailableActions = async () => {
@@ -108,9 +152,11 @@ export const getResearchData = async () => requestList('/dashboard/research', ma
 export default {
   getDashboardSummary,
   getSupportTickets,
+  getSupportDashboard,
   getFinanceAdjustments,
   getCompanyHealth,
   getProductNews,
+  getNpsDashboard,
   getAvailableActions,
   triggerAction,
   getResearchData,
