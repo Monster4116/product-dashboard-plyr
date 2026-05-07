@@ -138,6 +138,50 @@ const KPICard = ({ label, value, sub, sign }) => (
   </div>
 );
 
+const ExportButtons = ({ csvRows, sheets, csvName, xlsxName, title }) => {
+  const [busy, setBusy] = useState('');
+
+  const runExport = async (type) => {
+    if (!window.dashboardExport) {
+      window.alert('Export tools are not available yet.');
+      return;
+    }
+
+    try {
+      setBusy(type);
+
+      if (type === 'csv') {
+        window.dashboardExport.exportRowsAsCsv({
+          rows: csvRows,
+          filename: csvName,
+        });
+        return;
+      }
+
+      await window.dashboardExport.exportWorkbookAsXlsx({
+        filename: xlsxName,
+        title,
+        sheets,
+      });
+    } catch (error) {
+      window.alert(error?.message || 'Export failed.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="section-actions">
+      <button className="action-btn secondary" type="button" onClick={() => runExport('csv')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'csv' ? 'Exporting CSV…' : 'Export CSV'}
+      </button>
+      <button className="action-btn secondary" type="button" onClick={() => runExport('xlsx')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'xlsx' ? 'Exporting XLSX…' : 'Export XLSX'}
+      </button>
+    </div>
+  );
+};
+
 const SeverityBadge = ({ value }) => {
   const normalized = String(value || 'Unknown').toLowerCase();
   const cls = normalized === 'l4' ? 'detractor' : normalized === 'l3' ? 'passive' : normalized === 'l2' ? 'neutral' : 'promoter';
@@ -201,6 +245,22 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
   const [activeTab, setActiveTab] = useState('overview');
 
   const filterOptions = dashboard.metadata.availableFilters || {};
+  const csvRows = useMemo(() => {
+    if (activeTab === 'insights') return dashboard.insights;
+    if (activeTab === 'themes') return dashboard.hotspots.companies;
+    return dashboard.trend;
+  }, [activeTab, dashboard]);
+  const workbookSheets = useMemo(() => ([
+    { name: 'Summary', rows: [dashboard.summary] },
+    { name: 'Trend', rows: dashboard.trend },
+    { name: 'Insights', rows: dashboard.insights },
+    { name: 'Hotspots', rows: dashboard.hotspots.companies },
+    { name: 'Statuses', rows: dashboard.distributions.statuses },
+    { name: 'Severities', rows: dashboard.distributions.severities },
+    { name: 'Categories', rows: dashboard.distributions.categories },
+    { name: 'Countries', rows: dashboard.distributions.countries },
+    { name: 'Process flags', rows: dashboard.distributions.processFlags },
+  ]), [dashboard]);
 
   const trendChart = useMemo(() => ({
     type: 'bar',
@@ -343,7 +403,16 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
           <h2 className="section-title">Filters</h2>
           <p className="section-sub">Filters reload aggregate support metrics through the same server-side dashboard endpoint.</p>
         </div>
-        <button className="feed-item-toggle" type="button" onClick={clearFilters}>Clear filters</button>
+        <div className="section-actions">
+          <button className="feed-item-toggle" type="button" onClick={clearFilters}>Clear filters</button>
+          <ExportButtons
+            csvRows={csvRows}
+            sheets={workbookSheets}
+            csvName="support-dashboard.csv"
+            xlsxName="support-dashboard.xlsx"
+            title="Support dashboard export"
+          />
+        </div>
       </div>
 
       <section className="filter-panel">

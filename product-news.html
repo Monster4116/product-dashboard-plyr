@@ -151,6 +151,54 @@ const KPICard = ({ label, value, sub }) => (
   </div>
 );
 
+const ExportButtons = ({ rows, csvName, xlsxName, title }) => {
+  const [busy, setBusy] = useState('');
+
+  const runExport = async (type) => {
+    if (!window.dashboardExport) {
+      window.alert('Export tools are not available yet.');
+      return;
+    }
+
+    if (!rows.length) {
+      window.alert('There are no rows available to export for the current filters.');
+      return;
+    }
+
+    try {
+      setBusy(type);
+
+      if (type === 'csv') {
+        window.dashboardExport.exportRowsAsCsv({ rows, filename: csvName });
+        return;
+      }
+
+      await window.dashboardExport.exportWorkbookAsXlsx({
+        filename: xlsxName,
+        title,
+        sheets: [
+          { name: 'Product news', rows },
+        ],
+      });
+    } catch (error) {
+      window.alert(error?.message || 'Export failed.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="section-actions">
+      <button className="action-btn secondary" type="button" onClick={() => runExport('csv')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'csv' ? 'Exporting CSV…' : 'Export CSV'}
+      </button>
+      <button className="action-btn secondary" type="button" onClick={() => runExport('xlsx')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'xlsx' ? 'Exporting XLSX…' : 'Export XLSX'}
+      </button>
+    </div>
+  );
+};
+
 const CategoryBadge = ({ category }) => {
   const meta = getCategoryMeta(category);
   return <span className={`category-badge ${meta.tone}`}>{meta.label}</span>;
@@ -521,7 +569,7 @@ const ProductNewsView = ({ rows }) => {
           <h2 className="section-title">Filters</h2>
           <p className="section-sub">Filter the current feed by category, actor or keyword search across headlines, summaries and insights.</p>
         </div>
-        <div style={{ display:'flex', gap: 10, flexWrap:'wrap' }}>
+        <div className="section-actions">
           <select className="f-select" value={category} onChange={e => setCategory(e.target.value)}>
             <option value="">All categories</option>
             {categories.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
@@ -537,6 +585,12 @@ const ProductNewsView = ({ rows }) => {
             value={query}
             onChange={e => setQuery(e.target.value)}
             style={{ minWidth: 260 }}
+          />
+          <ExportButtons
+            rows={feedRows}
+            csvName="product-news.csv"
+            xlsxName="product-news.xlsx"
+            title="Product news export"
           />
         </div>
       </div>

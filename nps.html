@@ -173,6 +173,50 @@ const KPICard = ({ label, value, sub, sign }) => (
   </div>
 );
 
+const ExportButtons = ({ csvRows, sheets, csvName, xlsxName, title }) => {
+  const [busy, setBusy] = useState('');
+
+  const runExport = async (type) => {
+    if (!window.dashboardExport) {
+      window.alert('Export tools are not available yet.');
+      return;
+    }
+
+    try {
+      setBusy(type);
+
+      if (type === 'csv') {
+        window.dashboardExport.exportRowsAsCsv({
+          rows: csvRows,
+          filename: csvName,
+        });
+        return;
+      }
+
+      await window.dashboardExport.exportWorkbookAsXlsx({
+        filename: xlsxName,
+        title,
+        sheets,
+      });
+    } catch (error) {
+      window.alert(error?.message || 'Export failed.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="section-actions">
+      <button className="action-btn secondary" type="button" onClick={() => runExport('csv')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'csv' ? 'Exporting CSV…' : 'Export CSV'}
+      </button>
+      <button className="action-btn secondary" type="button" onClick={() => runExport('xlsx')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'xlsx' ? 'Exporting XLSX…' : 'Export XLSX'}
+      </button>
+    </div>
+  );
+};
+
 const GroupBadge = ({ value }) => (
   <span className={`nps-badge ${groupClass(value)}`}>{value}</span>
 );
@@ -438,6 +482,23 @@ const App = () => {
       return true;
     });
   }, [dashboard, selectedMonth, selectedType, selectedGroup, clientQuery]);
+  const csvRows = useMemo(() => (
+    activeTab === 'explorer'
+      ? filteredResponses
+      : dashboard?.trend || []
+  ), [activeTab, dashboard, filteredResponses]);
+  const workbookSheets = useMemo(() => {
+    if (!dashboard) return [];
+
+    return [
+      { name: 'Summary', rows: [dashboard.summary] },
+      { name: 'Trend', rows: dashboard.trend },
+      { name: 'Segments', rows: dashboard.segments },
+      { name: 'Respondent types', rows: dashboard.distribution.respondentTypes },
+      { name: 'Departments', rows: dashboard.distribution.departmentSignals },
+      { name: 'Responses', rows: filteredResponses },
+    ];
+  }, [dashboard, filteredResponses]);
 
   const insight = useMemo(() => {
     if (!dashboard) return '';
@@ -684,7 +745,8 @@ const App = () => {
                     : 'Headline view uses the latest available month in the trusted reporting pipeline.'}
                 </p>
               </div>
-              <div className="filter-group nps-toolbar-control">
+              <div className="section-actions">
+                <div className="filter-group nps-toolbar-control">
                 <label htmlFor="collection-version">Collection version</label>
                 <select
                   id="collection-version"
@@ -696,6 +758,14 @@ const App = () => {
                     <option key={item} value={item}>{item}</option>
                   ))}
                 </select>
+                </div>
+                <ExportButtons
+                  csvRows={csvRows}
+                  sheets={workbookSheets}
+                  csvName="nps-dashboard.csv"
+                  xlsxName="nps-dashboard.xlsx"
+                  title="NPS dashboard export"
+                />
               </div>
             </section>
 
@@ -854,6 +924,13 @@ const App = () => {
                 <h2 className="section-title">Response explorer</h2>
                 <p className="section-sub">Trace the headline score back to real responses without exposing raw database tables in the browser.</p>
               </div>
+              <ExportButtons
+                csvRows={csvRows}
+                sheets={workbookSheets}
+                csvName="nps-dashboard.csv"
+                xlsxName="nps-dashboard.xlsx"
+                title="NPS dashboard export"
+              />
             </section>
 
             <section className="filter-panel">

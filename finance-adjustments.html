@@ -128,6 +128,57 @@ const KPICard = ({ label, value, sub, sign }) => (
   </div>
 );
 
+const ExportButtons = ({ csvName, xlsxName, title, rows, disabled }) => {
+  const [busy, setBusy] = useState('');
+
+  const runExport = async (type) => {
+    if (!window.dashboardExport) {
+      window.alert('Export tools are not available yet.');
+      return;
+    }
+
+    if (!rows.length) {
+      window.alert('There are no rows available to export for the current filters.');
+      return;
+    }
+
+    try {
+      setBusy(type);
+
+      if (type === 'csv') {
+        window.dashboardExport.exportRowsAsCsv({
+          rows,
+          filename: csvName,
+        });
+        return;
+      }
+
+      await window.dashboardExport.exportWorkbookAsXlsx({
+        filename: xlsxName,
+        title,
+        sheets: [
+          { name: 'Finance adjustments', rows },
+        ],
+      });
+    } catch (error) {
+      window.alert(error?.message || 'Export failed.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="section-actions">
+      <button className="action-btn secondary" type="button" onClick={() => runExport('csv')} disabled={disabled || busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'csv' ? 'Exporting CSV…' : 'Export CSV'}
+      </button>
+      <button className="action-btn secondary" type="button" onClick={() => runExport('xlsx')} disabled={disabled || busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'xlsx' ? 'Exporting XLSX…' : 'Export XLSX'}
+      </button>
+    </div>
+  );
+};
+
 function readFinanceCache() {
   try {
     const raw = sessionStorage.getItem(FINANCE_CACHE_KEY);
@@ -258,7 +309,7 @@ const FinanceView = ({ rows }) => {
           <h2 className="section-title">Filters</h2>
           <p className="section-sub">Narrow the live dataset by territory and primary aspect.</p>
         </div>
-        <div style={{ display:'flex', gap: 10, flexWrap:'wrap' }}>
+        <div className="section-actions">
           <select className="f-select" value={territory} onChange={e => setTerritory(e.target.value)}>
             <option value="">All territories</option>
             {territories.map(t => <option key={t} value={t}>{t}</option>)}
@@ -267,6 +318,12 @@ const FinanceView = ({ rows }) => {
             <option value="">All aspects</option>
             {aspects.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
+          <ExportButtons
+            rows={filtered}
+            csvName="finance-adjustments.csv"
+            xlsxName="finance-adjustments.xlsx"
+            title="Finance adjustments export"
+          />
         </div>
       </div>
 

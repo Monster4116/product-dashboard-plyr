@@ -131,6 +131,54 @@ const KPICard = ({ label, value, sub, sign }) => (
   </div>
 );
 
+const ExportButtons = ({ rows, csvName, xlsxName, title }) => {
+  const [busy, setBusy] = useState('');
+
+  const runExport = async (type) => {
+    if (!window.dashboardExport) {
+      window.alert('Export tools are not available yet.');
+      return;
+    }
+
+    if (!rows.length) {
+      window.alert('There are no rows available to export for the current filters.');
+      return;
+    }
+
+    try {
+      setBusy(type);
+
+      if (type === 'csv') {
+        window.dashboardExport.exportRowsAsCsv({ rows, filename: csvName });
+        return;
+      }
+
+      await window.dashboardExport.exportWorkbookAsXlsx({
+        filename: xlsxName,
+        title,
+        sheets: [
+          { name: 'Company health', rows },
+        ],
+      });
+    } catch (error) {
+      window.alert(error?.message || 'Export failed.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="section-actions">
+      <button className="action-btn secondary" type="button" onClick={() => runExport('csv')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'csv' ? 'Exporting CSV…' : 'Export CSV'}
+      </button>
+      <button className="action-btn secondary" type="button" onClick={() => runExport('xlsx')} disabled={busy === 'csv' || busy === 'xlsx'}>
+        {busy === 'xlsx' ? 'Exporting XLSX…' : 'Export XLSX'}
+      </button>
+    </div>
+  );
+};
+
 const StatusBadge = ({ value }) => {
   const normalized = normalizeRag(value).toLowerCase();
   const color = normalized.includes('red') ? '#F44336'
@@ -265,7 +313,7 @@ const CompanyHealthView = ({ rows }) => {
           <h2 className="section-title">Filters</h2>
           <p className="section-sub">Filter the current company health snapshot by RAG status and company identifier.</p>
         </div>
-        <div style={{ display:'flex', gap: 10, flexWrap:'wrap' }}>
+        <div className="section-actions">
           <select className="f-select" value={rag} onChange={e => setRag(e.target.value)}>
             <option value="">All RAG statuses</option>
             {rags.map(item => <option key={item} value={item}>{item}</option>)}
@@ -277,6 +325,12 @@ const CompanyHealthView = ({ rows }) => {
             value={query}
             onChange={e => setQuery(e.target.value)}
             style={{ minWidth: 180 }}
+          />
+          <ExportButtons
+            rows={filtered}
+            csvName="company-health.csv"
+            xlsxName="company-health.xlsx"
+            title="Company health export"
           />
         </div>
       </div>
