@@ -174,6 +174,18 @@ window.DASHBOARD_PAGES = [
     icon: 'AX',
     cardTitle: 'Actions',
     description: 'Trigger controlled diagnostics, calculation previews and test integrations through the dashboard action runner.'
+  },
+  {
+    id: 'knowledge-base',
+    label: 'Knowledge Base',
+    title: 'Knowledge Base',
+    href: 'knowledge-base.html',
+    navGroup: 'Pages',
+    status: 'live',
+    accentClass: 'accent-neutral',
+    icon: 'KB',
+    cardTitle: 'Knowledge base',
+    description: 'Browse payroll calculator documentation imported from Obsidian through a searchable in-dashboard reading experience.'
   }
 ];
 
@@ -228,7 +240,7 @@ window.renderSidebar = function renderSidebar(activePageId) {
             <span class="theme-toggle-state" data-theme-toggle-state>${isDark ? 'On' : 'Off'}</span>
           </span>
         </button>
-        <div class="sidebar-footnote">Supabase-backed dashboards</div>
+        <div class="sidebar-footnote">Shared dashboard suite</div>
       </div>
     </aside>
   `;

@@ -16,7 +16,7 @@
     <header class="app-header">
       <div class="header-left">
         <div class="logo">Product One</div>
-        <div class="header-sub">Home page for the live dashboard pages</div>
+        <div class="header-sub">Home page for the live dashboard pages and knowledge resources</div>
       </div>
       <a class="header-link" href="product-news.html">Open product news dashboard</a>
     </header>
@@ -25,9 +25,9 @@
         <section class="page-hero home-banner">
           <div class="home-banner-copy">
             <div class="eyebrow">Dashboard suite</div>
-            <h1 class="page-hero-title">Available dashboards</h1>
+            <h1 class="page-hero-title">Available pages</h1>
             <p class="page-hero-copy">
-              The dashboard now has a shared shell with separate page files. Right now the live data footprint includes product news, NPS, finance adjustments, company health, support and actions, all delivered through the shared dashboard structure.
+              The dashboard now has a shared shell with separate page files. Right now the live footprint includes product news, NPS, finance adjustments, company health, support, actions and an integrated payroll knowledge base, all delivered through the shared dashboard structure.
             </p>
             <div class="home-banner-tag-row">
               <span class="home-banner-tag">Insight-driven</span>
@@ -111,8 +111,8 @@
 
         <section class="info-strip">
           <div class="info-strip-item">
-            <span class="info-strip-label">Current live dashboards</span>
-            <span class="info-strip-value">Product news, NPS, finance adjustments, company health, support and actions</span>
+            <span class="info-strip-label">Current live pages</span>
+            <span class="info-strip-value">Product news, NPS, finance adjustments, company health, support, actions and the payroll knowledge base</span>
           </div>
           <div class="info-strip-item">
             <span class="info-strip-label">Architecture</span>
@@ -120,13 +120,13 @@
           </div>
           <div class="info-strip-item">
             <span class="info-strip-label">Current pattern</span>
-            <span class="info-strip-value">Service-backed pages with mock-first integration</span>
+            <span class="info-strip-value">Service-backed dashboards with a shared in-app documentation layer</span>
           </div>
         </section>
 
         <section class="section-header">
           <div>
-            <h2 class="section-title">Live dashboards</h2>
+            <h2 class="section-title">Live pages</h2>
             <p class="section-sub">Only pages already added to the shared dashboard shell are listed here.</p>
           </div>
         </section>
@@ -135,7 +135,7 @@
 
         <section class="home-footer-note">
           <span>Product One</span>
-          <span>Product news, NPS, finance adjustments, company health, support and actions are the current dashboard pages</span>
+          <span>Product news, NPS, finance adjustments, company health, support, actions and the payroll knowledge base are the current dashboard pages</span>
         </section>
       </div>
     </section>
@@ -149,14 +149,14 @@
   const stats = window.getDashboardStats();
   document.getElementById('hero-stats').innerHTML = `
     <div class="home-banner-stat">
-      <span class="home-banner-stat-label">Live dashboards</span>
+      <span class="home-banner-stat-label">Live pages</span>
       <strong class="home-banner-stat-value">${stats.liveDashboards}</strong>
       <span class="home-banner-stat-meta">${stats.liveDashboards} of ${stats.totalDashboards} active</span>
     </div>
     <div class="home-banner-stat">
       <span class="home-banner-stat-label">Current structure</span>
       <strong class="home-banner-stat-value">${stats.totalDashboards}</strong>
-      <span class="home-banner-stat-meta">Dedicated dashboard pages</span>
+      <span class="home-banner-stat-meta">Dedicated dashboard pages and docs</span>
     </div>
     <div class="home-banner-stat">
       <span class="home-banner-stat-label">Experience</span>
@@ -177,8 +177,10 @@
         : page.id === 'support'
         ? ['Data source: Shared dashboard service', 'Dataset: Support tickets and AI support context']
         : page.id === 'actions'
-          ? ['Data source: Shared action runner', 'Dataset: Diagnostics and triggers']
-          : ['Data source: Shared dashboard service', 'Dataset: Finance adjustments'];
+        ? ['Data source: Shared action runner', 'Dataset: Diagnostics and triggers']
+        : page.id === 'knowledge-base'
+        ? ['Data source: Local markdown knowledge base', 'Dataset: Payroll calculator documentation']
+        : ['Data source: Shared dashboard service', 'Dataset: Finance adjustments'];
       const highlights = page.id === 'product-news'
         ? [
             'Category mix across competitor, AI, PM and regulatory signals',
@@ -204,16 +206,22 @@
             'Sanitized AI summaries and requester intent without raw comments',
           ]
         : page.id === 'actions'
-          ? [
-              'Run diagnostics against live dashboard dependencies',
-              'Preview company health calculations without writing back',
-              'Preview or send test webhook calls through a server-side allowlist',
-            ]
-          : [
-              'Monthly volume and exposure trend',
-              'Primary aspect concentration',
-              'Latest adjustment records with filtering',
-            ];
+        ? [
+            'Run diagnostics against live dashboard dependencies',
+            'Preview company health calculations without writing back',
+            'Preview or send test webhook calls through a server-side allowlist',
+          ]
+        : page.id === 'knowledge-base'
+        ? [
+            'Browse imported Obsidian articles in a dashboard-native reader',
+            'Search topics and move through linked concepts without leaving the shell',
+            'Flag unresolved wiki links while keeping the imported content usable',
+          ]
+        : [
+            'Monthly volume and exposure trend',
+            'Primary aspect concentration',
+            'Latest adjustment records with filtering',
+          ];
       return `
         <article class="dashboard-card ${page.accentClass}">
           <div class="dashboard-card-top">
@@ -231,7 +239,7 @@
             <li>${highlights[1]}</li>
             <li>${highlights[2]}</li>
           </ul>
-          <a class="dashboard-card-link" href="${page.href}">Open dashboard</a>
+          <a class="dashboard-card-link" href="${page.href}">${page.id === 'knowledge-base' ? 'Open knowledge base' : 'Open dashboard'}</a>
         </article>
       `;
     })
