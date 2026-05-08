@@ -1,0 +1,251 @@
+{
+  "main": {
+    "id": "93ea3540586c9d3a",
+    "type": "split",
+    "children": [
+      {
+        "id": "1c79204616041adc",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "78a1da8bf5db370c",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "payroll-wiki/calculator-results.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "calculator-results"
+            }
+          },
+          {
+            "id": "cad5c69d17b0a34a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "payroll-wiki/leave-adjustment.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "leave-adjustment"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "8ba051a8bedb23d5",
+    "type": "split",
+    "children": [
+      {
+        "id": "7fdd7471ad20c628",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c54847de87d40ca0",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": true
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "34b0d139ba3bd689",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "0d9826e7586d6e01",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 377.5
+  },
+  "right": {
+    "id": "245b86537915c182",
+    "type": "split",
+    "children": [
+      {
+        "id": "07c4b9e6f204d760",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b5261ad752b0396c",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "payroll-wiki/leave-adjustment.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for leave-adjustment"
+            }
+          },
+          {
+            "id": "6d6323deb962e74e",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "payroll-wiki/leave-adjustment.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from leave-adjustment"
+            }
+          },
+          {
+            "id": "5f044af059bf8fcd",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "fe9ce3f90ae1563b",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "b911132e677bbeff",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "payroll-wiki/leave-adjustment.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of leave-adjustment"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "cad5c69d17b0a34a",
+  "lastOpenFiles": [
+    "payroll-wiki/termination-results.md",
+    "payroll-wiki/leave-adjustment.md",
+    "payroll-wiki/00-index.md",
+    "payroll-wiki/hourly-employee.md",
+    "payroll-wiki/invoice-details.md",
+    "payroll-wiki/exchange-rates.md",
+    "payroll-wiki/usa-pay-periods.md",
+    "monorepo/README.md",
+    "payroll-wiki",
+    "untitled folder",
+    "monorepo/img_1.png",
+    "monorepo/img.png",
+    "monorepo/scripts/ci/LOCAL_TESTING.md",
+    "monorepo/scripts/ci/INTEGRATION.md",
+    "monorepo/docs/payroll/Pay Periods.pdf",
+    "monorepo/AGENTS.md",
+    "monorepo/changeset-output.json",
+    "monorepo/services/document-signing-service/handlers/uploadAgreementSignUrl.ts",
+    "monorepo/services/document-signing-service/handlers/copyMsaAgreementTemplate.ts",
+    "monorepo/services/document-signing-service/handlers/signUrl.ts",
+    "monorepo/services/document-signing-service/handlers/getDocument.ts",
+    "monorepo/services/document-signing-service/handlers/pullSignedPdfs.ts",
+    "monorepo/services/document-signing-service/handlers/authorizer.ts",
+    "monorepo/services/document-signing-service/README.md",
+    "monorepo/services/document-signing-service/CHANGELOG.md",
+    "monorepo/services/contractor-payment-service/CHANGELOG.md",
+    "monorepo/services/payroll-service/README.md",
+    "monorepo/services/payroll-service/ECS_DEPLOYMENT.md",
+    "monorepo/services/payroll-service/COMMANDS.md",
+    "monorepo/services/payroll-service/CHANGELOG.md",
+    "monorepo/services/audit-service/README.md",
+    "monorepo/services/audit-service/CHANGELOG.md",
+    "monorepo/services/cron-service/README.md",
+    "monorepo/services/cron-service/CHANGELOG.md",
+    "monorepo/packages/integration-hibob/CHANGELOG.md",
+    "monorepo/packages/knit-service/CHANGELOG.md",
+    "monorepo/packages/utc/CHANGELOG.md",
+    "monorepo/packages/slack-integration/CHANGELOG.md",
+    "monorepo/img_3.png",
+    "monorepo/storybook/src/logo.svg",
+    "monorepo/storybook/src/stories/assets/stackalt.svg",
+    "monorepo/storybook/src/stories/assets/repo.svg",
+    "monorepo/storybook/src/stories/assets/profile.jpeg",
+    "monorepo/storybook/src/stories/assets/plugin.svg",
+    "monorepo/storybook/src/stories/assets/flow.svg",
+    "monorepo/storybook/src/stories/assets/flag.png",
+    "Untitled.canvas"
+  ]
+}

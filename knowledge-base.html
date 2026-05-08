@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product One | Knowledge Base</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="dashboard-pages.js"></script>
+<script type="text/babel">
+const { useEffect, useMemo, useState } = React;
+
+const DOC_LIBRARY = [
+  {
+    slug: '00-index',
+    file: '00-index.md',
+    title: 'Knowledge Base Index',
+    summary: 'Directory of the imported payroll calculator documentation and the core concept areas it covers.',
+    category: 'Start Here'
+  },
+  {
+    slug: 'calculator-results',
+    file: 'calculator-results.md',
+    title: 'Record Structure',
+    summary: 'Field-by-field reference for the invoice calculator result object and its linked calculation contexts.',
+    category: 'Invoice & Records'
+  },
+  {
+    slug: 'invoice-record-type',
+    file: 'invoice-record-type.md',
+    title: 'Invoice Record Type',
+    summary: 'Explains the observed invoice result types and what they mean in product terms.',
+    category: 'Invoice & Records'
+  },
+  {
+    slug: 'invoice-details',
+    file: 'invoice-details.md',
+    title: 'Invoice Details',
+    summary: 'Breaks down the invoice detail information shown alongside calculator results.',
+    category: 'Invoice & Records'
+  },
+  {
+    slug: 'employee-data',
+    file: 'employee-data.md',
+    title: 'Employee Data',
+    summary: 'Defines the employee calculation context used to generate invoice results.',
+    category: 'Employee'
+  },
+  {
+    slug: 'employee-status',
+    file: 'employee-status.md',
+    title: 'Employee Status',
+    summary: 'Explains the employee status values used in payroll and invoice calculation flows.',
+    category: 'Employee'
+  },
+  {
+    slug: 'hourly-employee',
+    file: 'hourly-employee.md',
+    title: 'Hourly Employee',
+    summary: 'Documents how hourly employees are handled when time tracking and payroll calculations apply.',
+    category: 'Employee'
+  },
+  {
+    slug: 'salary-payment-options',
+    file: 'salary-payment-options.md',
+    title: 'Salary Payment Options',
+    summary: 'Covers how salary configuration, valuation and payment options shape invoice calculations.',
+    category: 'Salary & Payments'
+  },
+  {
+    slug: 'usa-pay-periods',
+    file: 'usa-pay-periods.md',
+    title: 'US Bi-Weekly Payroll Logic',
+    summary: 'Explains why US employees can have two- and three-pay-period invoice months.',
+    category: 'Salary & Payments'
+  },
+  {
+    slug: 'totals-breakdown',
+    file: 'totals-breakdown.md',
+    title: 'Totals Breakdown',
+    summary: 'Describes how payroll, invoice and contribution totals are assembled in calculator results.',
+    category: 'Totals & Contributions'
+  },
+  {
+    slug: 'employer-contribution-breakdown',
+    file: 'employer-contribution-breakdown.md',
+    title: 'Employer Contribution Breakdown',
+    summary: 'Line-item explanation of employer-side costs included in the invoice result.',
+    category: 'Totals & Contributions'
+  },
+  {
+    slug: 'leave-adjustment',
+    file: 'leave-adjustment.md',
+    title: 'Leave Adjustment',
+    summary: 'Shows how leave activity turns into payroll adjustments and payout context.',
+    category: 'Totals & Contributions'
+  },
+  {
+    slug: 'termination-results',
+    file: 'termination-results.md',
+    title: 'Termination Results',
+    summary: 'Covers termination-related payouts such as leave, severance and notice pay.',
+    category: 'Totals & Contributions'
+  },
+  {
+    slug: 'exchange-rates',
+    file: 'exchange-rates.md',
+    title: 'Exchange Rates',
+    summary: 'Explains exchange-rate context and where currency conversion affects payroll and invoicing.',
+    category: 'Currency & Fees'
+  },
+  {
+    slug: 'currency-conversion-fees',
+    file: 'currency-conversion-fees.md',
+    title: 'Currency Conversion Fees',
+    summary: 'Documents when conversion fees appear and how they interact with the broader invoice result.',
+    category: 'Currency & Fees'
+  },
+  {
+    slug: 'transaction-fee-calculation',
+    file: 'transaction-fee-calculation.md',
+    title: 'Transaction Fee Calculation',
+    summary: 'Explains how embedded transaction fees are calculated and applied.',
+    category: 'Currency & Fees'
+  }
+];
+
+const DOC_MAP = Object.fromEntries(DOC_LIBRARY.map(doc => [doc.slug, doc]));
+const DOC_CACHE = new Map();
+const DOC_ROOT_SEGMENTS = ['payroll calculator', 'payroll-wiki'];
+const WIKI_ALIAS_MAP = {
+  'hourly-employees': 'hourly-employee',
+  'hourly employee': 'hourly-employee'
+};
+
+function normalizeSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.md$/i, '')
+    .replace(/[ _]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function resolveWikiSlug(rawSlug) {
+  const normalized = normalizeSlug(rawSlug);
+  const alias = WIKI_ALIAS_MAP[normalized] || normalized;
+  return DOC_MAP[alias] ? alias : null;
+}
+
+function makeDocPath(doc) {
+  return [...DOC_ROOT_SEGMENTS, doc.file].map(segment => encodeURIComponent(segment)).join('/');
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function slugifyHeading(text) {
+  return normalizeSlug(text) || 'section';
+}
+
+function parseInline(text, context) {
+  let output = escapeHtml(text);
+
+  output = output.replace(/`([^`]+)`/g, (_, code) => `<code>${code}</code>`);
+  output = output.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  output = output.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  output = output.replace(/\[\[([^\]]+)\]\]/g, (_, rawTarget) => {
+    const resolvedSlug = resolveWikiSlug(rawTarget);
+
+    if (resolvedSlug) {
+      const doc = DOC_MAP[resolvedSlug];
+      context.relatedSet.add(resolvedSlug);
+      return `<a href="#doc=${resolvedSlug}" data-doc-link="${resolvedSlug}" class="kb-inline-chip">${escapeHtml(doc.title)}</a>`;
+    }
+
+    const unresolvedKey = normalizeSlug(rawTarget);
+    if (unresolvedKey) context.unresolvedSet.add(unresolvedKey);
+    return `<span class="kb-unresolved-chip" title="Linked concept not imported into this repo yet">${escapeHtml(rawTarget)}</span>`;
+  });
+
+  return output;
+}
+
+function buildTableHtml(lines, context) {
+  const rows = lines.map(line => line.trim()).filter(Boolean);
+  if (rows.length < 2) return '';
+
+  const header = rows[0].slice(1, -1).split('|').map(cell => cell.trim());
+  const separator = rows[1];
+  if (!/^\|(?:\s*:?-+:?\s*\|)+\s*$/.test(separator)) return '';
+
+  const bodyRows = rows.slice(2).map(row => row.slice(1, -1).split('|').map(cell => cell.trim()));
+  const headHtml = header.map(cell => `<th>${parseInline(cell, context)}</th>`).join('');
+  const bodyHtml = bodyRows.map(cells => (
+    `<tr>${cells.map(cell => `<td>${parseInline(cell, context)}</td>`).join('')}</tr>`
+  )).join('');
+
+  return `<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+}
+
+function renderMarkdown(raw) {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const htmlParts = [];
+  const outline = [];
+  const relatedSet = new Set();
+  const unresolvedSet = new Set();
+  const context = { relatedSet, unresolvedSet };
+
+  let paragraphLines = [];
+  let listItems = [];
+  let tableLines = [];
+  let codeLines = [];
+  let inCodeBlock = false;
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return;
+    const joined = paragraphLines.join(' ').trim();
+    if (joined) htmlParts.push(`<p>${parseInline(joined, context)}</p>`);
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    htmlParts.push(`<ul>${listItems.map(item => `<li>${parseInline(item, context)}</li>`).join('')}</ul>`);
+    listItems = [];
+  };
+
+  const flushTable = () => {
+    if (!tableLines.length) return;
+    const tableHtml = buildTableHtml(tableLines, context);
+    if (tableHtml) {
+      htmlParts.push(tableHtml);
+    } else {
+      tableLines.forEach(line => {
+        paragraphLines.push(line);
+      });
+      flushParagraph();
+    }
+    tableLines = [];
+  };
+
+  const flushCode = () => {
+    if (!codeLines.length) {
+      htmlParts.push('<pre><code></code></pre>');
+      return;
+    }
+    htmlParts.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+    codeLines = [];
+  };
+
+  lines.forEach(line => {
+    const trimmed = line.trim();
+
+    if (inCodeBlock) {
+      if (trimmed.startsWith('```')) {
+        flushCode();
+        inCodeBlock = false;
+      } else {
+        codeLines.push(line);
+      }
+      return;
+    }
+
+    if (trimmed.startsWith('```')) {
+      flushParagraph();
+      flushList();
+      flushTable();
+      inCodeBlock = true;
+      codeLines = [];
+      return;
+    }
+
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      flushTable();
+      return;
+    }
+
+    if (/^---+$/.test(trimmed)) {
+      flushParagraph();
+      flushList();
+      flushTable();
+      htmlParts.push('<hr>');
+      return;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      flushTable();
+      const level = headingMatch[1].length;
+      const headingText = headingMatch[2].trim();
+      const headingId = slugifyHeading(headingText);
+      outline.push({ level, id: headingId, text: headingText });
+      htmlParts.push(`<h${level} id="${headingId}">${parseInline(headingText, context)}</h${level}>`);
+      return;
+    }
+
+    if (/^\|.*\|$/.test(trimmed)) {
+      flushParagraph();
+      flushList();
+      tableLines.push(trimmed);
+      return;
+    }
+
+    const listMatch = trimmed.match(/^[-*]\s+(.*)$/);
+    if (listMatch) {
+      flushParagraph();
+      flushTable();
+      listItems.push(listMatch[1]);
+      return;
+    }
+
+    paragraphLines.push(trimmed);
+  });
+
+  flushParagraph();
+  flushList();
+  flushTable();
+
+  if (inCodeBlock) flushCode();
+
+  return {
+    html: htmlParts.join('\n'),
+    outline,
+    relatedSlugs: [...relatedSet],
+    unresolvedSlugs: [...unresolvedSet],
+  };
+}
+
+async function loadDocument(doc) {
+  if (DOC_CACHE.has(doc.slug)) return DOC_CACHE.get(doc.slug);
+
+  const response = await fetch(makeDocPath(doc), { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Could not load ${doc.file} (${response.status})`);
+  }
+
+  const markdown = await response.text();
+  const rendered = renderMarkdown(markdown);
+  const payload = { ...doc, markdown, ...rendered };
+  DOC_CACHE.set(doc.slug, payload);
+  return payload;
+}
+
+function groupDocs(docs) {
+  return docs.reduce((acc, doc) => {
+    if (!acc[doc.category]) acc[doc.category] = [];
+    acc[doc.category].push(doc);
+    return acc;
+  }, {});
+}
+
+const LoadingScreen = () => (
+  <div className="center-screen">
+    <div className="spinner" />
+    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>Loading payroll knowledge base…</p>
+  </div>
+);
+
+const ErrorScreen = ({ message }) => (
+  <div className="center-screen">
+    <div className="err-title">Failed to load the knowledge base</div>
+    <div className="err-msg">{message}</div>
+    <div className="err-msg" style={{ marginTop: 8 }}>
+      If you are opening the HTML file directly from disk, serve the repo through a local web server so the markdown files can be fetched safely.
+    </div>
+  </div>
+);
+
+function KnowledgeBaseView() {
+  const [query, setQuery] = useState('');
+  const [selectedSlug, setSelectedSlug] = useState(() => {
+    const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('doc');
+    return DOC_MAP[fromHash] ? fromHash : '00-index';
+  });
+  const [article, setArticle] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const filteredDocs = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return DOC_LIBRARY;
+    return DOC_LIBRARY.filter(doc => [doc.title, doc.summary, doc.category, doc.slug].join(' ').toLowerCase().includes(term));
+  }, [query]);
+
+  const groupedDocs = useMemo(() => groupDocs(filteredDocs), [filteredDocs]);
+  const selectedMeta = DOC_MAP[selectedSlug] || DOC_MAP['00-index'];
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const run = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const loaded = await loadDocument(selectedMeta);
+        if (!isCancelled) setArticle(loaded);
+      } catch (err) {
+        if (!isCancelled) {
+          setError(err.message || String(err));
+          setArticle(null);
+        }
+      } finally {
+        if (!isCancelled) setLoading(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedMeta]);
+
+  useEffect(() => {
+    window.location.hash = `doc=${selectedSlug}`;
+  }, [selectedSlug]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const nextSlug = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('doc');
+      if (nextSlug && DOC_MAP[nextSlug]) {
+        setSelectedSlug(nextSlug);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    if (!article) return;
+
+    const nextDocLinks = article.relatedSlugs.filter(slug => DOC_MAP[slug] && slug !== article.slug).length;
+    document.title = `Product One | Knowledge Base | ${article.title}`;
+    if (typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'auto' });
+
+    if (!nextDocLinks) return;
+  }, [article]);
+
+  const openDoc = slug => {
+    if (!DOC_MAP[slug]) return;
+    setSelectedSlug(slug);
+  };
+
+  const jumpToHeading = headingId => {
+    const node = document.getElementById(headingId);
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const onArticleClick = event => {
+    const linkedDoc = event.target.closest('[data-doc-link]');
+    if (!linkedDoc) return;
+    event.preventDefault();
+    openDoc(linkedDoc.getAttribute('data-doc-link'));
+  };
+
+  const relatedDocs = article
+    ? article.relatedSlugs.filter(slug => slug !== article.slug).map(slug => DOC_MAP[slug]).filter(Boolean)
+    : [];
+
+  const unresolvedRefs = article ? article.unresolvedSlugs : [];
+
+  return (
+    <div className="tab-content">
+      <section className="page-hero compact">
+        <div>
+          <div className="eyebrow">Integrated documentation</div>
+          <h1 className="page-hero-title">Payroll knowledge base</h1>
+          <p className="page-hero-copy">
+            Browse the imported Obsidian payroll calculator documentation without leaving the dashboard shell. Internal wiki links resolve in-app where possible, and missing concepts are called out cleanly instead of failing silently.
+          </p>
+        </div>
+        <div className="hero-stat-block">
+          <span className="status-pill live">Live</span>
+          <div className="hero-stat-kicker">Imported articles</div>
+          <div className="hero-stat-value">{DOC_LIBRARY.length}</div>
+          <div className="hero-stat-meta">Markdown files from the Obsidian export</div>
+        </div>
+      </section>
+
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Documentation reader</h2>
+          <p className="section-sub">Search by concept, open an article, and move through related topics using dashboard-native navigation.</p>
+        </div>
+      </div>
+
+      <section className="kb-layout">
+        <aside className="kb-sidebar-panel">
+          <div className="kb-sidebar-top">
+            <span className="sidebar-section-label" style={{ padding: 0 }}>Browse articles</span>
+            <p>
+              This first version is focused on the imported payroll wiki. It keeps the content readable now while leaving space for the wider repo docs to join the same experience later.
+            </p>
+            <input
+              className="f-input kb-search"
+              type="search"
+              placeholder="Search articles, categories or concepts"
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+            />
+            <div className="kb-result-note">{filteredDocs.length} of {DOC_LIBRARY.length} articles shown</div>
+          </div>
+
+          <div className="kb-sidebar-body">
+            {Object.keys(groupedDocs).length === 0 ? (
+              <div className="kb-empty-state">No articles matched that search.</div>
+            ) : (
+              Object.entries(groupedDocs).map(([groupName, docs]) => (
+                <section className="kb-doc-group" key={groupName}>
+                  <span className="kb-doc-group-label">{groupName}</span>
+                  <div className="kb-doc-list">
+                    {docs.map(doc => (
+                      <button
+                        key={doc.slug}
+                        className={`kb-doc-button${doc.slug === selectedSlug ? ' active' : ''}`}
+                        type="button"
+                        onClick={() => openDoc(doc.slug)}
+                      >
+                        <span className="kb-doc-title">{doc.title}</span>
+                        <span className="kb-doc-summary">{doc.summary}</span>
+                        <span className="kb-doc-meta">
+                          <span className="kb-doc-chip">{doc.category}</span>
+                          <span className="kb-doc-chip">{doc.file}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
+          </div>
+        </aside>
+
+        <article className="kb-article-panel">
+          {loading ? (
+            <div className="kb-article-body"><LoadingScreen /></div>
+          ) : error ? (
+            <div className="kb-article-body"><ErrorScreen message={error} /></div>
+          ) : article ? (
+            <>
+              <div className="kb-article-head">
+                <h2>{article.title}</h2>
+                <p>{article.summary}</p>
+                <div className="kb-article-meta">
+                  <span className="kb-doc-chip">{article.category}</span>
+                  <span className="kb-doc-chip">{article.file}</span>
+                  <span className="kb-doc-chip">{article.relatedSlugs.length} linked concepts</span>
+                  {unresolvedRefs.length > 0 && (
+                    <span className="kb-unresolved-chip">{unresolvedRefs.length} unresolved references</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="kb-article-body">
+                <div className="kb-article-grid">
+                  <div className="kb-article-copy">
+                    <div
+                      className="kb-markdown"
+                      onClick={onArticleClick}
+                      dangerouslySetInnerHTML={{ __html: article.html }}
+                    />
+
+                    <div className="kb-article-footer">
+                      <section className="kb-footer-card">
+                        <h3>Related articles</h3>
+                        {relatedDocs.length ? (
+                          <div className="kb-related-list">
+                            {relatedDocs.map(doc => (
+                              <button
+                                key={doc.slug}
+                                className="kb-related-link"
+                                type="button"
+                                onClick={() => openDoc(doc.slug)}
+                              >
+                                {doc.title}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p>No imported related articles were resolved from this page yet.</p>
+                        )}
+                      </section>
+
+                      <section className="kb-footer-card">
+                        <h3>Missing linked concepts</h3>
+                        {unresolvedRefs.length ? (
+                          <ul>
+                            {unresolvedRefs.map(slug => <li key={slug}>{slug}</li>)}
+                          </ul>
+                        ) : (
+                          <p>All wiki links on this page resolve to imported articles.</p>
+                        )}
+                      </section>
+                    </div>
+                  </div>
+
+                  <aside className="kb-outline">
+                    <span className="kb-outline-title">On this page</span>
+                    {article.outline.length ? (
+                      <nav className="kb-outline-list">
+                        {article.outline.map(item => (
+                          <button
+                            key={`${item.id}-${item.text}`}
+                            className={`kb-outline-link level-${item.level}`}
+                            type="button"
+                            onClick={() => jumpToHeading(item.id)}
+                          >
+                            {item.text}
+                          </button>
+                        ))}
+                      </nav>
+                    ) : (
+                      <div className="kb-result-note">No section headings were found in this article.</div>
+                    )}
+                  </aside>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </article>
+      </section>
+    </div>
+  );
+}
+
+const App = () => {
+  const sidebar = { __html: window.renderSidebar('knowledge-base') };
+
+  return (
+    <div className="shell">
+      <div style={{ display: 'contents' }} dangerouslySetInnerHTML={sidebar} />
+      <main className="app">
+        <header className="app-header">
+          <div className="header-left">
+            <div className="logo">Knowledge Base</div>
+            <div className="header-sub">Imported Obsidian docs · dashboard-native reader</div>
+          </div>
+          <a className="header-link" href="index.html">Back to home</a>
+        </header>
+        <section className="app-main">
+          <KnowledgeBaseView />
+        </section>
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
