@@ -83,6 +83,13 @@ const DOC_LIBRARY = [
     category: 'Salary & Payments'
   },
   {
+    slug: 'salary-basis',
+    file: 'salary-basis.md',
+    title: 'Salary Basis',
+    summary: 'Explains how monthly versus hourly basis changes the gross-pay calculation path before currency and billing logic apply.',
+    category: 'Salary & Payments'
+  },
+  {
     slug: 'usa-pay-periods',
     file: 'usa-pay-periods.md',
     title: 'US Bi-Weekly Payroll Logic',
@@ -118,6 +125,13 @@ const DOC_LIBRARY = [
     category: 'Totals & Contributions'
   },
   {
+    slug: 'cost-apportionment',
+    file: 'cost-apportionment.md',
+    title: 'Cost Apportionment',
+    summary: 'Documents how partial-period salary and other costs are prorated across monthly and pay-period contexts.',
+    category: 'Totals & Contributions'
+  },
+  {
     slug: 'exchange-rates',
     file: 'exchange-rates.md',
     title: 'Exchange Rates',
@@ -137,6 +151,20 @@ const DOC_LIBRARY = [
     title: 'Transaction Fee Calculation',
     summary: 'Explains how embedded transaction fees are calculated and applied.',
     category: 'Currency & Fees'
+  },
+  {
+    slug: 'territory',
+    file: 'territory.md',
+    title: 'Territory',
+    summary: 'Explains the territory concept and the rule configuration that drives pay periods, apportionment, contributions, and leave logic.',
+    category: 'Reference Data'
+  },
+  {
+    slug: 'taxonomy',
+    file: 'taxonomy.md',
+    title: 'Payroll Taxonomy',
+    summary: 'Canonical payroll vocabulary, aliases, code anchors, and naming conflicts used to keep the wiki searchable and consistent.',
+    category: 'Reference Data'
   }
 ];
 
@@ -167,6 +195,17 @@ function resolveWikiSlug(rawSlug) {
 
 function makeDocPath(doc) {
   return [...DOC_ROOT_SEGMENTS, doc.file].map(segment => encodeURIComponent(segment)).join('/');
+}
+
+function parseSearchTags(raw) {
+  const match = raw.match(/\*\*Search Tags:\*\*\s*([\s\S]*?)(?:\n|$)/i);
+  if (!match) return [];
+
+  const tags = [...match[1].matchAll(/`([^`]+)`/g)]
+    .map(([, tag]) => tag.trim())
+    .filter(Boolean);
+
+  return [...new Set(tags)];
 }
 
 function escapeHtml(value) {
@@ -365,7 +404,7 @@ async function loadDocument(doc) {
 
   const markdown = await response.text();
   const rendered = renderMarkdown(markdown);
-  const payload = { ...doc, markdown, ...rendered };
+  const payload = { ...doc, markdown, searchTags: parseSearchTags(markdown), ...rendered };
   DOC_CACHE.set(doc.slug, payload);
   return payload;
 }
@@ -402,14 +441,48 @@ function KnowledgeBaseView() {
     return DOC_MAP[fromHash] ? fromHash : '00-index';
   });
   const [article, setArticle] = useState(null);
+  const [docMetadata, setDocMetadata] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    Promise.all(
+      DOC_LIBRARY.map(doc =>
+        loadDocument(doc)
+          .then(loaded => ({
+            slug: loaded.slug,
+            searchTags: loaded.searchTags || [],
+          }))
+          .catch(() => ({
+            slug: doc.slug,
+            searchTags: [],
+          }))
+      )
+    ).then(results => {
+      if (isCancelled) return;
+      setDocMetadata(
+        Object.fromEntries(results.map(result => [result.slug, result]))
+      );
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const filteredDocs = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return DOC_LIBRARY;
-    return DOC_LIBRARY.filter(doc => [doc.title, doc.summary, doc.category, doc.slug].join(' ').toLowerCase().includes(term));
-  }, [query]);
+    return DOC_LIBRARY.filter(doc => {
+      const tags = docMetadata[doc.slug]?.searchTags || [];
+      return [doc.title, doc.summary, doc.category, doc.slug, tags.join(' ')]
+        .join(' ')
+        .toLowerCase()
+        .includes(term);
+    });
+  }, [docMetadata, query]);
 
   const groupedDocs = useMemo(() => groupDocs(filteredDocs), [filteredDocs]);
   const selectedMeta = DOC_MAP[selectedSlug] || DOC_MAP['00-index'];
@@ -577,6 +650,9 @@ function KnowledgeBaseView() {
                   <span className="kb-doc-chip">{article.category}</span>
                   <span className="kb-doc-chip">{article.file}</span>
                   <span className="kb-doc-chip">{article.relatedSlugs.length} linked concepts</span>
+                  {article.searchTags?.length > 0 && (
+                    <span className="kb-doc-chip">{article.searchTags.length} search tags</span>
+                  )}
                   {unresolvedRefs.length > 0 && (
                     <span className="kb-unresolved-chip">{unresolvedRefs.length} unresolved references</span>
                   )}
@@ -591,6 +667,24 @@ function KnowledgeBaseView() {
                       onClick={onArticleClick}
                       dangerouslySetInnerHTML={{ __html: article.html }}
                     />
+
+                    {article.searchTags?.length > 0 && (
+                      <section className="kb-footer-card">
+                        <h3>Search tags</h3>
+                        <div className="kb-related-list">
+                          {article.searchTags.map(tag => (
+                            <button
+                              key={tag}
+                              className="kb-related-link"
+                              type="button"
+                              onClick={() => setQuery(tag)}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    )}
 
                     <div className="kb-article-footer">
                       <section className="kb-footer-card">
