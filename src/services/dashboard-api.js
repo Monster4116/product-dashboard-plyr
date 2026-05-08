@@ -147,6 +147,20 @@ export const triggerAction = async (actionId, payload = {}) => {
   return mapActionRunResult(response);
 };
 
+export const submitFeedback = async (payload = {}) => {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('A feedback payload is required.');
+  }
+
+  const response = await postJson('/feedback', payload);
+
+  if (!response || typeof response !== 'object') {
+    throw new Error('Unexpected response shape from /feedback.');
+  }
+
+  return response;
+};
+
 export const getResearchData = async () => requestList('/dashboard/research', mapResearchItem);
 
 export default {
@@ -159,5 +173,6 @@ export default {
   getNpsDashboard,
   getAvailableActions,
   triggerAction,
+  submitFeedback,
   getResearchData,
 };

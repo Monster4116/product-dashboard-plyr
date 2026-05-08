@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20260508-feedback5">
 </head>
 <body>
 <div class="shell">
@@ -142,7 +142,14 @@
   </main>
 </div>
 
-<script src="dashboard-pages.js"></script>
+<script>
+  window.__PUBLIC_CONFIG__ = {
+    appEnv: 'production',
+    apiBaseUrl: 'https://toajcgsenjhtkmhisqkz.supabase.co/functions/v1',
+  };
+</script>
+<script src="dashboard-pages.js?v=20260508-feedback4"></script>
+<script type="module" src="src/services/dashboard-api.browser.js?v=20260508-feedback4"></script>
 <script>
   document.getElementById('sidebar-root').outerHTML = window.renderSidebar('home');
 

@@ -1,4 +1,19 @@
 const DASHBOARD_THEME_KEY = 'dashboard.theme';
+const FEEDBACK_MODAL_ID = 'dashboard-feedback-modal';
+const FEEDBACK_TYPES = {
+  issue: {
+    title: 'Report an Issue',
+    subtitle: 'Flag something broken, confusing or missing in the current dashboard experience.',
+    buttonLabel: 'Send issue',
+    successMessage: 'Your issue report has been sent.',
+  },
+  idea: {
+    title: 'Submit an Idea',
+    subtitle: 'Share an improvement, workflow suggestion or new dashboard concept for the team to review.',
+    buttonLabel: 'Send idea',
+    successMessage: 'Your idea has been sent.',
+  },
+};
 
 function resolveDashboardTheme(theme) {
   return theme === 'dark' ? 'dark' : 'light';
@@ -199,10 +214,179 @@ window.getDashboardStats = function getDashboardStats() {
   };
 };
 
+window.getDashboardPageMeta = function getDashboardPageMeta(pageId) {
+  const pages = window.DASHBOARD_PAGES || [];
+  return pages.find(page => page.id === pageId) || null;
+};
+
+window.ensureFeedbackModal = function ensureFeedbackModal() {
+  if (!document.body || document.getElementById(FEEDBACK_MODAL_ID)) return;
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="feedback-modal-shell" id="${FEEDBACK_MODAL_ID}" hidden style="display:none;">
+      <div class="feedback-modal-backdrop" data-feedback-close="true"></div>
+      <div class="feedback-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedback-modal-title">
+        <button class="feedback-modal-close" type="button" aria-label="Close feedback form" data-feedback-close="true">×</button>
+        <div class="feedback-modal-eyebrow" id="feedback-modal-type">Feedback</div>
+        <h2 class="feedback-modal-title" id="feedback-modal-title">Share feedback</h2>
+        <p class="feedback-modal-copy" id="feedback-modal-copy">Tell us what happened and we will route it through the secure feedback workflow.</p>
+        <form class="feedback-form" id="feedback-form">
+          <input id="feedback-type-input" name="feedbackType" type="hidden" value="" />
+          <div class="feedback-form-grid">
+            <label class="feedback-field">
+              <span>Name</span>
+              <input class="feedback-input" id="feedback-name" name="name" type="text" maxlength="120" placeholder="Optional" />
+            </label>
+            <label class="feedback-field">
+              <span>Email</span>
+              <input class="feedback-input" id="feedback-email" name="email" type="email" maxlength="180" placeholder="Optional" />
+            </label>
+          </div>
+          <label class="feedback-field">
+            <span>Message</span>
+            <textarea class="feedback-input feedback-textarea" id="feedback-message" name="message" rows="7" maxlength="5000" placeholder="Share the issue or idea with enough detail for the team to investigate." required></textarea>
+          </label>
+          <div class="feedback-form-note" id="feedback-context"></div>
+          <div class="feedback-form-status" id="feedback-status" aria-live="polite"></div>
+          <div class="feedback-form-actions">
+            <button class="action-btn secondary" type="button" data-feedback-close="true">Cancel</button>
+            <button class="action-btn" id="feedback-submit-btn" type="submit">Send feedback</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `);
+
+  const modal = document.getElementById(FEEDBACK_MODAL_ID);
+  const form = document.getElementById('feedback-form');
+  const close = () => window.closeFeedbackModal();
+
+  modal.querySelectorAll('[data-feedback-close="true"]').forEach(node => {
+    node.addEventListener('click', close);
+  });
+
+  form.addEventListener('submit', window.submitFeedbackForm);
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !modal.hidden) {
+      close();
+    }
+  });
+};
+
+window.closeFeedbackModal = function closeFeedbackModal() {
+  const modal = document.getElementById(FEEDBACK_MODAL_ID);
+  if (!modal) return;
+
+  modal.hidden = true;
+  modal.style.display = 'none';
+  document.body.classList.remove('feedback-modal-open');
+};
+
+window.openFeedbackModal = function openFeedbackModal(type) {
+  const details = FEEDBACK_TYPES[type];
+  if (!details) return;
+
+  window.ensureFeedbackModal();
+
+  const modal = document.getElementById(FEEDBACK_MODAL_ID);
+  const form = document.getElementById('feedback-form');
+  const title = document.getElementById('feedback-modal-title');
+  const eyebrow = document.getElementById('feedback-modal-type');
+  const copy = document.getElementById('feedback-modal-copy');
+  const submitButton = document.getElementById('feedback-submit-btn');
+  const status = document.getElementById('feedback-status');
+  const message = document.getElementById('feedback-message');
+  const context = document.getElementById('feedback-context');
+  const typeInput = document.getElementById('feedback-type-input');
+  const activePageId = window.__dashboardActivePageId || 'home';
+  const pageMeta = window.getDashboardPageMeta(activePageId);
+
+  form.reset();
+  form.dataset.feedbackType = type;
+  typeInput.value = type;
+  title.textContent = details.title;
+  eyebrow.textContent = type === 'issue' ? 'Issue report' : 'Idea submission';
+  copy.textContent = details.subtitle;
+  submitButton.textContent = details.buttonLabel;
+  status.textContent = '';
+  status.className = 'feedback-form-status';
+  context.textContent = pageMeta
+    ? `This will be linked to ${pageMeta.title}.`
+    : 'This will be linked to the current dashboard page.';
+
+  modal.hidden = false;
+  modal.style.display = 'flex';
+  document.body.classList.add('feedback-modal-open');
+  window.requestAnimationFrame(() => message.focus());
+};
+
+window.submitFeedbackForm = async function submitFeedbackForm(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const typeInput = document.getElementById('feedback-type-input');
+  const type = typeInput?.value || form.dataset.feedbackType;
+  const details = FEEDBACK_TYPES[type];
+  const status = document.getElementById('feedback-status');
+  const submitButton = document.getElementById('feedback-submit-btn');
+  const name = document.getElementById('feedback-name').value.trim();
+  const email = document.getElementById('feedback-email').value.trim();
+  const message = document.getElementById('feedback-message').value.trim();
+  const activePageId = window.__dashboardActivePageId || 'home';
+  const pageMeta = window.getDashboardPageMeta(activePageId);
+
+  if (!details) {
+    status.textContent = 'This page is using an outdated feedback script. Refresh with Cmd+Shift+R and try again.';
+    status.className = 'feedback-form-status error';
+    return;
+  }
+
+  if (message.length < 8) {
+    status.textContent = 'Please add a little more detail before sending.';
+    status.className = 'feedback-form-status error';
+    return;
+  }
+
+  if (!window.dashboardApi || typeof window.dashboardApi.submitFeedback !== 'function') {
+    status.textContent = 'The secure feedback service is not available yet on this page.';
+    status.className = 'feedback-form-status error';
+    return;
+  }
+
+  submitButton.disabled = true;
+  status.textContent = 'Sending...';
+  status.className = 'feedback-form-status';
+
+  try {
+    await window.dashboardApi.submitFeedback({
+      type,
+      message,
+      name: name || undefined,
+      email: email || undefined,
+      pageId: activePageId,
+      pageTitle: pageMeta?.title || document.title,
+      url: window.location.href,
+    });
+
+    status.textContent = details.successMessage;
+    status.className = 'feedback-form-status success';
+    window.setTimeout(() => window.closeFeedbackModal(), 900);
+  } catch (error) {
+    status.textContent = error?.message || 'Failed to send feedback.';
+    status.className = 'feedback-form-status error';
+  } finally {
+    submitButton.disabled = false;
+  }
+};
+
 window.renderSidebar = function renderSidebar(activePageId) {
   const pages = window.DASHBOARD_PAGES || [];
   const groups = [...new Set(pages.map(page => page.navGroup))];
   const isDark = window.getDashboardTheme() === 'dark';
+
+  window.__dashboardActivePageId = activePageId;
+  window.setTimeout(() => window.ensureFeedbackModal(), 0);
 
   const navSections = groups.map(group => {
     const items = pages
@@ -233,6 +417,22 @@ window.renderSidebar = function renderSidebar(activePageId) {
         ${navSections}
       </div>
       <div class="sidebar-footer">
+        <div class="feedback-launcher">
+          <button class="feedback-launch-btn" type="button" onclick="window.openFeedbackModal('issue')">
+            <span class="feedback-launch-icon">!</span>
+            <span class="feedback-launch-copy">
+              <span class="feedback-launch-label">Report an Issue</span>
+              <span class="feedback-launch-meta">Flag a dashboard problem</span>
+            </span>
+          </button>
+          <button class="feedback-launch-btn secondary" type="button" onclick="window.openFeedbackModal('idea')">
+            <span class="feedback-launch-icon">+</span>
+            <span class="feedback-launch-copy">
+              <span class="feedback-launch-label">Submit an Idea</span>
+              <span class="feedback-launch-meta">Share an improvement</span>
+            </span>
+          </button>
+        </div>
         <button class="theme-toggle" type="button" onclick="window.toggleDashboardTheme()">
           <span class="theme-toggle-icon" data-theme-toggle-icon>${isDark ? '☀' : '☾'}</span>
           <span class="theme-toggle-copy">
