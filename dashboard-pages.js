@@ -1,4 +1,5 @@
 const DASHBOARD_THEME_KEY = 'dashboard.theme';
+const DASHBOARD_SIDEBAR_KEY = 'dashboard.sidebar.state';
 const FEEDBACK_MODAL_ID = 'dashboard-feedback-modal';
 const FEEDBACK_TYPES = {
   issue: {
@@ -14,6 +15,30 @@ const FEEDBACK_TYPES = {
     successMessage: 'Your idea has been sent.',
   },
 };
+
+const DASHBOARD_ICON_SPRITES = {
+  home: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5v7a1.5 1.5 0 0 1-1.5 1.5h-4.25V14h-4.5v6H5.5A1.5 1.5 0 0 1 4 18.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+  news: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.75h11.5A1.5 1.5 0 0 1 19 7.25v9.5A1.5 1.5 0 0 1 17.5 18H8a3 3 0 0 1-3-3V7.75A2 2 0 0 1 7 5.75v9.5a1.25 1.25 0 0 0 2.5 0V9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 9h5M10.5 12h5M10.5 15h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  nps: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5 9.25 12l3.25 2.75 5-6.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 6v12.25A1.75 1.75 0 0 0 6.75 20H19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  finance: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.75v14.5M8.75 8.25c0-1.38 1.45-2.5 3.25-2.5s3.25 1.12 3.25 2.5-1.45 2.5-3.25 2.5-3.25 1.12-3.25 2.5 1.45 2.5 3.25 2.5 3.25-1.12 3.25-2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  health: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19.25s-6.75-4.3-6.75-9.1A3.9 3.9 0 0 1 9.2 6.25c1.23 0 2.27.55 2.8 1.42.53-.87 1.57-1.42 2.8-1.42a3.9 3.9 0 0 1 3.95 3.9c0 4.8-6.75 9.1-6.75 9.1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  support: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.25 9.5a3.75 3.75 0 1 1 7.5 0c0 1.6-.94 2.43-2.07 3.1-.98.58-1.43 1.14-1.43 2.15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17.25" r="1" fill="currentColor"/></svg>`,
+  actions: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13.75 5.5 4.75 4.75-8.5 8.5H5.25v-4.75z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m11.75 7.5 4.75 4.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  knowledge: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.25 5.5h10.5A1.25 1.25 0 0 1 18 6.75v10.5a1.25 1.25 0 0 1-1.25 1.25H8.5A2.5 2.5 0 0 0 6 21V7.75A2.25 2.25 0 0 1 8.25 5.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 9.25h5M9.5 12.25h5M9.5 15.25h3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  issue: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25v4.5M12 16.25h.01M6.1 18.75h11.8c1.1 0 1.8-1.18 1.27-2.15L13.27 6.2a1.45 1.45 0 0 0-2.54 0L4.83 16.6c-.53.97.17 2.15 1.27 2.15Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  idea: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.25 17.25h5.5M10 20h4M9.05 14.5c-1.38-.9-2.3-2.46-2.3-4.25a5.25 5.25 0 1 1 10.5 0c0 1.79-.92 3.35-2.3 4.25-.55.36-.95 1.02-.95 1.68v.07h-4v-.07c0-.66-.4-1.32-.95-1.68Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  theme: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.25 13.1A6.75 6.75 0 1 1 10.9 5.75a5.25 5.25 0 1 0 7.35 7.35Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  collapse: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.75 9.25 12l5.25 5.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  expand: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6.75 14.75 12 9.5 17.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+};
+
+function renderDashboardIcon(iconName) {
+  return DASHBOARD_ICON_SPRITES[iconName] || DASHBOARD_ICON_SPRITES.actions;
+}
+
+function resolveSidebarState(state) {
+  return state === 'closed' ? 'closed' : 'open';
+}
 
 function resolveDashboardTheme(theme) {
   return theme === 'dark' ? 'dark' : 'light';
@@ -48,12 +73,11 @@ window.getDashboardThemePalette = function getDashboardThemePalette() {
 window.syncDashboardThemeButtons = function syncDashboardThemeButtons() {
   const theme = window.getDashboardTheme();
   const isDark = theme === 'dark';
-  const icon = isDark ? '☀' : '☾';
   const label = isDark ? 'Light mode' : 'Dark mode';
   const state = isDark ? 'On' : 'Off';
 
   document.querySelectorAll('[data-theme-toggle-icon]').forEach(node => {
-    node.textContent = icon;
+    node.innerHTML = renderDashboardIcon('theme');
   });
 
   document.querySelectorAll('[data-theme-toggle-label]').forEach(node => {
@@ -62,6 +86,11 @@ window.syncDashboardThemeButtons = function syncDashboardThemeButtons() {
 
   document.querySelectorAll('[data-theme-toggle-state]').forEach(node => {
     node.textContent = state;
+  });
+
+  document.querySelectorAll('.theme-toggle').forEach(node => {
+    node.setAttribute('title', label);
+    node.setAttribute('data-nav-label', label);
   });
 };
 
@@ -98,6 +127,51 @@ window.toggleDashboardTheme = function toggleDashboardTheme() {
   return window.applyDashboardTheme(nextTheme);
 };
 
+window.getDashboardSidebarState = function getDashboardSidebarState() {
+  if (window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
+    return 'open';
+  }
+
+  try {
+    return resolveSidebarState(localStorage.getItem(DASHBOARD_SIDEBAR_KEY));
+  } catch (_) {
+    return 'open';
+  }
+};
+
+window.setDashboardSidebarState = function setDashboardSidebarState(state, options = {}) {
+  const resolved = resolveSidebarState(state);
+  const sidebar = document.querySelector('.sidebar');
+  const isOpen = resolved === 'open';
+
+  if (sidebar) {
+    sidebar.classList.toggle('open', isOpen);
+    sidebar.classList.toggle('closed', !isOpen);
+    sidebar.dataset.sidebarState = resolved;
+  }
+
+  document.querySelectorAll('[data-sidebar-toggle]').forEach(node => {
+    node.setAttribute('aria-pressed', String(!isOpen));
+    node.setAttribute('aria-label', isOpen ? 'Collapse navigation' : 'Expand navigation');
+    node.innerHTML = `<span class="nav-icon">${renderDashboardIcon(isOpen ? 'collapse' : 'expand')}</span>`;
+  });
+
+  if (options.persist !== false && (!window.matchMedia || !window.matchMedia('(max-width: 900px)').matches)) {
+    try {
+      localStorage.setItem(DASHBOARD_SIDEBAR_KEY, resolved);
+    } catch (_) {
+      // Ignore storage write failures and continue with the in-memory state.
+    }
+  }
+
+  return resolved;
+};
+
+window.toggleDashboardSidebar = function toggleDashboardSidebar() {
+  const nextState = window.getDashboardSidebarState() === 'open' ? 'closed' : 'open';
+  return window.setDashboardSidebarState(nextState);
+};
+
 window.addEventListener('storage', event => {
   if (event.key !== DASHBOARD_THEME_KEY) return;
   window.applyDashboardTheme(resolveDashboardTheme(event.newValue), { persist: false, emit: false });
@@ -114,7 +188,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-neutral',
-    icon: 'HM',
+    icon: 'home',
     cardTitle: 'Dashboard home',
     description: 'See the available dashboards, what data each page contains, and navigate into the live finance dashboard.'
   },
@@ -126,7 +200,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-secondary',
-    icon: 'PN',
+    icon: 'news',
     cardTitle: 'Product news',
     description: 'Read the latest product, competitor, regulatory and AI signals in one searchable research feed with quick links back to the source.'
   },
@@ -138,7 +212,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-secondary',
-    icon: 'NP',
+    icon: 'nps',
     cardTitle: 'NPS',
     description: 'Track NPS trends, compare employee and client sentiment, and drill down from monthly scores into auditable response-level detail.'
   },
@@ -150,7 +224,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-primary',
-    icon: 'FA',
+    icon: 'finance',
     cardTitle: 'Finance adjustments',
     description: 'Analyse payroll adjustment variances by primary aspect, territory, company and employee, with trend and exposure views.'
   },
@@ -162,7 +236,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-success',
-    icon: 'CH',
+    icon: 'health',
     cardTitle: 'Company health',
     description: 'Monitor company-level health scores, RAG coverage, support pressure and the drivers behind at-risk accounts.'
   },
@@ -174,7 +248,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-info',
-    icon: 'SP',
+    icon: 'support',
     cardTitle: 'Support',
     description: 'Read support volume, severity, categories, requester mix and AI-refined ticket context through a sanitized operations dashboard.'
   },
@@ -186,7 +260,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-info',
-    icon: 'AX',
+    icon: 'actions',
     cardTitle: 'Actions',
     description: 'Trigger controlled diagnostics, calculation previews and test integrations through the dashboard action runner.'
   },
@@ -198,7 +272,7 @@ window.DASHBOARD_PAGES = [
     navGroup: 'Pages',
     status: 'live',
     accentClass: 'accent-neutral',
-    icon: 'KB',
+    icon: 'knowledge',
     cardTitle: 'Knowledge base',
     description: 'Browse payroll calculator documentation imported from Obsidian through a searchable in-dashboard reading experience.'
   }
@@ -384,6 +458,8 @@ window.renderSidebar = function renderSidebar(activePageId) {
   const pages = window.DASHBOARD_PAGES || [];
   const groups = [...new Set(pages.map(page => page.navGroup))];
   const isDark = window.getDashboardTheme() === 'dark';
+  const sidebarState = window.getDashboardSidebarState();
+  const isCollapsed = sidebarState === 'closed';
 
   window.__dashboardActivePageId = activePageId;
   window.setTimeout(() => window.ensureFeedbackModal(), 0);
@@ -394,8 +470,14 @@ window.renderSidebar = function renderSidebar(activePageId) {
       .map(page => {
         const isActive = page.id === activePageId;
         return `
-          <a class="nav-item${isActive ? ' active' : ''}" href="${page.href}">
-            <span class="nav-icon">${page.icon}</span>
+          <a
+            class="nav-item${isActive ? ' active' : ''}"
+            href="${page.href}"
+            title="${page.label} - ${page.description}"
+            data-nav-label="${page.label}"
+            data-nav-meta="${page.description}"
+          >
+            <span class="nav-icon">${renderDashboardIcon(page.icon)}</span>
             <span class="nav-label">${page.label}</span>
           </a>
         `;
@@ -409,8 +491,18 @@ window.renderSidebar = function renderSidebar(activePageId) {
   }).join('');
 
   return `
-    <aside class="sidebar open">
+    <aside class="sidebar ${sidebarState}" data-sidebar-state="${sidebarState}">
       <div class="sidebar-logo-row">
+        <button
+          class="sidebar-toggle"
+          type="button"
+          aria-label="${isCollapsed ? 'Expand navigation' : 'Collapse navigation'}"
+          aria-pressed="${String(isCollapsed)}"
+          data-sidebar-toggle
+          onclick="window.toggleDashboardSidebar()"
+        >
+          <span class="nav-icon">${renderDashboardIcon(isCollapsed ? 'expand' : 'collapse')}</span>
+        </button>
         <div class="sidebar-wordmark">Product One</div>
       </div>
       <div class="sidebar-nav-stack">
@@ -418,23 +510,38 @@ window.renderSidebar = function renderSidebar(activePageId) {
       </div>
       <div class="sidebar-footer">
         <div class="feedback-launcher">
-          <button class="feedback-launch-btn" type="button" onclick="window.openFeedbackModal('issue')">
-            <span class="feedback-launch-icon">!</span>
-            <span class="feedback-launch-copy">
-              <span class="feedback-launch-label">Report an Issue</span>
-              <span class="feedback-launch-meta">Flag a dashboard problem</span>
-            </span>
+          <button
+            class="nav-item nav-action-item"
+            type="button"
+            onclick="window.openFeedbackModal('issue')"
+            title="Report an Issue - Flag a dashboard problem"
+            data-nav-label="Report an Issue"
+            data-nav-meta="Flag a dashboard problem"
+          >
+            <span class="nav-icon">${renderDashboardIcon('issue')}</span>
+            <span class="nav-label">Report an Issue</span>
           </button>
-          <button class="feedback-launch-btn secondary" type="button" onclick="window.openFeedbackModal('idea')">
-            <span class="feedback-launch-icon">+</span>
-            <span class="feedback-launch-copy">
-              <span class="feedback-launch-label">Submit an Idea</span>
-              <span class="feedback-launch-meta">Share an improvement</span>
-            </span>
+          <button
+            class="nav-item nav-action-item secondary"
+            type="button"
+            onclick="window.openFeedbackModal('idea')"
+            title="Submit an Idea - Share an improvement"
+            data-nav-label="Submit an Idea"
+            data-nav-meta="Share an improvement"
+          >
+            <span class="nav-icon">${renderDashboardIcon('idea')}</span>
+            <span class="nav-label">Submit an Idea</span>
           </button>
         </div>
-        <button class="theme-toggle" type="button" onclick="window.toggleDashboardTheme()">
-          <span class="theme-toggle-icon" data-theme-toggle-icon>${isDark ? '☀' : '☾'}</span>
+        <button
+          class="theme-toggle"
+          type="button"
+          onclick="window.toggleDashboardTheme()"
+          title="${isDark ? 'Light mode' : 'Dark mode'}"
+          data-nav-label="${isDark ? 'Light mode' : 'Dark mode'}"
+          data-nav-meta="Switch dashboard theme"
+        >
+          <span class="theme-toggle-icon" data-theme-toggle-icon>${renderDashboardIcon('theme')}</span>
           <span class="theme-toggle-copy">
             <span class="theme-toggle-label" data-theme-toggle-label>${isDark ? 'Light mode' : 'Dark mode'}</span>
             <span class="theme-toggle-state" data-theme-toggle-state>${isDark ? 'On' : 'Off'}</span>
