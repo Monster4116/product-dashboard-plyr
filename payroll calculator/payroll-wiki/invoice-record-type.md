@@ -4,6 +4,8 @@
 
 Invoice record type classifies the purpose of each calculator result record. The `type` field on the [[calculator-results]] record stores this value. It determines whether a record represents a live standard payroll run, a simulation, an out-of-cycle adjustment, or an annual recurring revenue calculation.
 
+**Search Tags:** `invoice record type`, `record type`, `result type`, `type`, `STANDARD_CYCLE`, `OUT_OF_CYCLE`, `UPCOMING_CYCLE`, `SIGNED_ARR`
+
 ## Product Context
 
 Playroll generates multiple types of calculator results for different operational purposes. Standard cycle records drive actual client invoices. Upcoming cycle records are simulations used for forecasting and client visibility before the real payroll run. Out-of-cycle records capture adjustments made outside the normal monthly schedule. The type value tells operations teams, reporting logic, and invoice generation which records should be used for billing and which are for informational or system purposes only.

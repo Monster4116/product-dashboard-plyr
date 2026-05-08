@@ -4,6 +4,8 @@
 
 A currency conversion fee applies when Playroll pays or funds an amount in one currency and bills the client in a different currency. The fee does not apply simply because an employee has a foreign salary, salary peg, or multiple currencies in the data — it applies only when there is an actual conversion required between the currency in which the amount was paid or funded and the client billing currency.
 
+**Search Tags:** `conversion fee`, `currency conversion fee`, `transaction fee`, `invoiceConversionFeePercentage`, `billing currency`, `foreign salary`, `salary peg`, `totalExcludingPlayrollFee`
+
 ## Product Context
 
 Playroll incurs a real cost when converting currencies to settle payroll and fund client invoices. The conversion fee covers this cost and is embedded in the billing currency invoice total rather than listed as a separate charge. Because payroll for a single employee can involve multiple currencies — local payroll, foreign salary payment, and client billing — the fee logic must be applied at the component level, not the whole invoice level. Operations teams and clients need to understand which components carry the fee and which do not, particularly for employees with foreign salary or salary peg arrangements.

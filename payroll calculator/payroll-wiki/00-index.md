@@ -65,3 +65,4 @@ This page is a directory of all pages in this knowledge base.
 ## Meta
 
 - [[open-questions]] — Tracks all unresolved business logic gaps across the wiki.
+- [[taxonomy]] — Canonical payroll vocabulary, aliases, and code anchors for consistent documentation and glossary building.

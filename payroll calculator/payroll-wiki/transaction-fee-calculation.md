@@ -4,6 +4,8 @@
 
 The transaction fee is the embedded conversion fee applied when amounts paid or funded by Playroll in one currency are billed to the client in another currency. It is not stored as a separate line item; instead, it is already incorporated into the billing currency totals. The transaction fee can be derived by comparing the actual billing currency total against what the local currency total would have been if converted at the exchange rate alone.
 
+**Search Tags:** `transaction fee calculation`, `transaction fee`, `embedded conversion fee`, `totalExcludingPlayrollFee`, `localToBillingExchangeRate`, `totalsBillingCurrency`, `totalsLocalCurrency`, `conversion fee`
+
 ## Product Context
 
 Playroll applies a conversion fee when it funds payroll in one currency and invoices the client in another. This fee covers the cost of currency conversion and is embedded in the billing total rather than shown as a separate charge. Clients and operations teams may need to calculate the transaction fee independently to reconcile the billing total or to understand how much of the invoice amount reflects the conversion cost. This page provides the formula and worked example for that derivation.

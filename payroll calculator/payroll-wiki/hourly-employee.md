@@ -4,6 +4,8 @@
 
 Hourly employees are those whose payroll is calculated from an hourly rate rather than a fixed monthly salary. The payroll process for hourly employees uses working-time assumptions to build an estimated salary for each cycle, and where approved time tracking data is available, it also calculates a timesheet-based salary. When a prior cycle used an estimate and actual hours are later confirmed, the variance is carried forward as an adjustment into the next cycle.
 
+**Search Tags:** `hourly employee`, `hourly employees`, `hourly payroll`, `salaryBasis`, `HOURLY`, `grossHourlySalary`, `hourlyBasisContext`, `timeTrackingEnabled`
+
 ## Product Context
 
 Payroll for hourly employees must be processed on time even when final timesheet data is not yet available. Playroll handles this by generating an estimated salary for the current cycle, then correcting for the difference between the estimate and actual hours in the following cycle. This means hourly employees can always be included in the monthly invoice run, with corrections applied automatically when approved timesheets arrive. Clients and operations teams need to understand that an hourly employee's invoice amount may include a correction from the previous month as well as the current month's estimated or confirmed pay.
@@ -50,6 +52,42 @@ Payroll for hourly employees must be processed on time even when final timesheet
 | `hourlyBasisContext.lastInvoiceEstimatedSalary` | Prior cycle estimated salary used for variance adjustment. |
 | `hourlyBasisContext.totalHoursLoggedForPreviousMonth` | Total hours logged for the previous month, used in variance calculation. |
 | `timeTrackingIds` | Time tracking records linked to the invoice result. See [[calculator-results]]. |
+
+## Relationship to Salary Payment Options
+
+Hourly logic decides how gross pay is derived, but it does not decide the currency model on its own.
+
+| Dimension | Question |
+|---|---|
+| Hourly payroll logic | How do we calculate gross pay for this cycle? |
+| Salary payment option | In which currency model is that pay defined, represented, and paid? |
+
+This means hourly employees can still participate in the same salary payment models documented in [[salary-payment-options]]:
+
+| Hourly Scenario | Result |
+|---|---|
+| Hourly + local salary | Estimated or timesheet salary is represented in local currency and billed through the normal local-to-billing path. |
+| Hourly + foreign salary | Estimated or timesheet salary still comes from hourly logic, but salary-payment and exchange-rate fields capture the foreign-currency arrangement. |
+| Hourly + salary peg | Hourly gross pay still follows the hourly path, while peg-related exchange-rate and employee fields describe the peg arrangement where supported. |
+
+In other words:
+
+- hourly logic produces the gross pay amount
+- salary payment setup determines how that amount is expressed across local, salary payment, and billing currencies
+
+## Relationship to Calculator and Totals
+
+Once hourly pay has been estimated or derived from timesheets, it flows into the same broader calculator outputs as monthly salary.
+
+| Output Area | Effect |
+|---|---|
+| `salaryTotalsFull` / `salaryTotalsProrated` | Store the resulting gross salary and downstream totals for the cycle. |
+| `exchangeRateContext` | Stores foreign salary or peg context where applicable. |
+| `totalsLocalCurrency` | Always contains the local payroll representation. |
+| `totalsSalaryPaymentCurrency` | Can contain a salary-payment-side representation when the arrangement requires it. |
+| `totalsBillingCurrency` | Contains the billing-currency representation used for invoice output. |
+
+This is why hourly employees should not be documented as a separate universe. They use a different gross-pay path, but they still land in the same calculator result structure.
 
 ## Diagram
 

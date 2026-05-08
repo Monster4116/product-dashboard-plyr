@@ -4,6 +4,8 @@
 
 The employer contribution breakdown represents the line-item employer costs calculated for an employee invoice result. The calculator result record can contain two employer contribution fields: a full breakdown for the invoice period and a prorated breakdown for partial periods. This page documents the structure of employer contribution line items only. Detailed payroll and tax calculation logic is documented in territory-specific payroll rules or the relevant tax configuration pages.
 
+**Search Tags:** `employer contribution`, `employer contributions`, `employer contribution breakdown`, `benefits`, `taxes`, `contributionClassification`, `amountWithoutBenefitMarkup`, `benefitId`
+
 ## Product Context
 
 Employer contributions are the statutory taxes, insurance, pension, and benefit costs that Playroll must pay on behalf of the employer for each employee. These vary by territory and can include social security, health insurance, retirement fund contributions, and optional benefits. By exposing each contribution as a line item, clients can see exactly what they are being charged for and reconcile it against local statutory obligations. Operations teams use the breakdown to verify that the correct contribution types and amounts have been applied for each employee's territory.

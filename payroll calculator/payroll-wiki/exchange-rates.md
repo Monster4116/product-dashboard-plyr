@@ -4,6 +4,8 @@
 
 The exchange rate context contains the currency and exchange rate information used when generating a calculator result. It records the employee's local payroll currency, the client billing currency, the exchange rate between them, standard reference rates from major currencies, the invoice conversion fee percentage, and foreign salary or salary peg currency details where applicable. This object is documented as a field on the calculator result record. Detailed salary payment method logic is documented in [[salary-payment-options]]. Detailed conversion fee rules are documented in [[currency-conversion-fees]].
 
+**Search Tags:** `exchange rates`, `exchange rate context`, `exchangeRateContext`, `localCurrencyCode`, `billingCurrencyCode`, `foreignToLocalExchangeRate`, `peggedToLocalExchangeRate`, `invoiceConversionFeePercentage`
+
 ## Product Context
 
 Accurate currency conversion is essential for producing correct invoice amounts and ensuring employees are paid the right amount. The exchange rate context captures all the currency relationships needed for a single calculation — it is a snapshot of the rates at calculation time, so the result remains auditable even after rates change. Operations teams can use this context to verify which exchange rates were applied to a particular invoice, and developers can use it to trace how amounts flowed from local payroll into billing currency totals.
