@@ -1,60 +1,105 @@
-# US Bi-Weekly Payroll Logic
+# USA Pay Periods
 
-## Core Concept
+## Overview
 
-In the US, employees are paid **bi-weekly**, meaning they are paid once every 2 weeks. This creates **26 pay periods per year**. (52 weeks per year / 2 weeks = 26 pay periods). However, invoicing is still managed across **12 calendar months**. This means the 26 pay periods do not divide evenly into 12 months.
+US employees are paid bi-weekly, meaning they are paid once every two weeks for a total of 26 pay periods per year. Because Playroll invoices clients on a monthly basis across 12 calendar months, the 26 bi-weekly pay periods do not divide evenly into 12 months. This mismatch means that most months contain 2 pay periods, but approximately 2 months per year contain 3 pay periods. Invoice totals for US employees vary month to month as a direct result of this structure.
 
-As a result:
-We have 2 months a year with 3 pay periods, and 10 months with 2 pay periods
+## Product Context
+
+Clients with US employees need to understand that invoice amounts will be higher in months that contain 3 pay periods, even when the employee's pay has not changed. This is not an error — it reflects the additional pay cycle within that month. The bi-weekly structure also means that invoice results are generated and tracked at the pay-period level, not the monthly level, to ensure accurate per-cycle reporting. Payroll operations teams use the pay period fields on each result record to identify which cycle a record belongs to and whether it is the primary invoice-facing result.
+
+## Core Rule
+
+| Rule | Explanation |
+|---|---|
+| US employees have 26 bi-weekly pay periods per year. | 52 weeks divided by 2 weeks per period equals 26 periods. |
+| Invoicing is monthly across 12 calendar months. | 26 pay periods do not divide evenly into 12 months. |
+| Most months contain 2 pay periods. | 10 months per year have 2 pay periods. |
+| Approximately 2 months per year contain 3 pay periods. | These months produce a higher invoice because the employee is paid for an additional cycle. |
+| The invoice-bearing result for a US employee is the record where `type` is `STANDARD_CYCLE` or `OUT_OF_CYCLE` and `isPrimary` is `true`. | Multiple records may exist for the same employee and month; `isPrimary` identifies the billable one. |
+
+## Pay Period Structure
 
 | Month Type | Number of Pay Periods | Frequency |
 |---|---:|---:|
-| Standard month | 2 pay periods | 10 months per year |
-| Three-pay-period month | 3 pay periods | 2 months per year |
-
-## Why This Matters
-
-Most US invoice months include **2 bi-weekly pay periods**. However, because there are 26 pay periods in a year and only 12 invoice months, **2 months in the year will include 3 pay periods**.
-
-This means that invoice totals for US employees can vary from month to month, even when the employee’s salary has not changed. A higher invoice amount in a three-pay-period month is expected because the employee is being paid for an additional pay cycle.
+| Standard month | 2 | 10 months per year |
+| Three-pay-period month | 3 | 2 months per year |
 
 ## Simple Example
 
 If a US employee earns a fixed amount per bi-weekly pay period:
 
-| Pay Period Amount | Month Type         | Monthly Invoice Salary Amount |
-| :---------------- | :----------------- | :---------------------------- |
-| $2,000            | 2-pay-period month | $4,000                        |
-| $2,000            | 3-pay-period month | $6,000                        |
+| Pay Period Amount | Month Type | Monthly Invoice Salary Amount |
+|---|---|---|
+| $2,000 | 2-pay-period month | $4,000 |
+| $2,000 | 3-pay-period month | $6,000 |
 
-The employee’s pay did not change. The invoice is higher because the month contains one additional pay period.
+The employee's pay did not change. The invoice is higher because the month contains one additional pay period.
 
-## Product Interpretation
+## Relevant Invoice Result Fields
 
-For US employees, the invoice result should be understood as **pay-period-based**, not purely monthly-salary-based.
+| Field | Why It Matters |
+|---|---|
+| `payPeriodStart` | Shows when the bi-weekly pay period begins. |
+| `payPeriodEnd` | Shows when the bi-weekly pay period ends. |
+| `calculationPeriod` | Identifies the result as `BI_WEEKLY` rather than `MONTHLY`. |
+| `isAggregated` | Indicates whether multiple pay period results have been rolled into a monthly invoice result. |
+| `isPrimary` | Identifies the main invoice-facing result where multiple records exist for the same period. |
+| `invoiceDate` | Shows the invoice month the pay period result belongs to. |
 
-| Concept                  | Explanation                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| Pay frequency            | Employees are paid every 2 weeks.                                               |
-| Annual pay periods       | There are 26 pay periods per year.                                              |
-| Monthly invoice mismatch | 26 pay periods do not fit evenly into 12 months.                                |
-| Standard invoice month   | Usually contains 2 pay periods.                                                 |
-| Higher invoice month     | Some months contain 3 pay periods.                                              |
-| Product impact           | Invoice results may be higher in 3-pay-period months without any salary change. |
+All fields above are documented in [[calculator-results]].
 
-## Relevant Invoice Result Fields ([[calculator-results]])
+## Invoice Interpretation for US Employees
 
-| Field               | Why It Matters                                                                                |
-| ------------------- | --------------------------------------------------------------------------------------------- |
-| `payPeriodStart`    | Shows when the bi-weekly pay period begins.                                                   |
-| `payPeriodEnd`      | Shows when the bi-weekly pay period ends.                                                     |
-| `calculationPeriod` | Identifies the result as `BI_WEEKLY`.                                                         |
-| `isAggregated`      | Indicates whether multiple pay period results have been rolled into a monthly invoice result. |
-| `isPrimary`         | Helps identify the main invoice-facing result where multiple records exist.                   |
-| `invoiceDate`       | Shows the invoice month that the pay period result belongs to.                                |
+For US employees, Playroll bases invoice totals on the per-pay-period result where `type` is `STANDARD_CYCLE` or `OUT_OF_CYCLE` and `isPrimary` is `true`. Each pay period is displayed as a separate line on the invoice breakdown to ensure clarity on the per-cycle amounts.
 
-## Invoicing For US Employees
+## Diagram
 
-For US employees, we based on invoice totals on the per pay period result being where the [[invoice-record-type]] is either STANDARD_CYCLE or OUT_OF_CYCLE but the isPrimary is TRUE.
+```mermaid
+flowchart TD
+    A[US employee invoice month] --> B{How many bi-weekly pay periods in this month?}
+    B -->|2 pay periods| C[Standard month — 2 result records]
+    B -->|3 pay periods| D[Three-pay-period month — 3 result records]
+    C --> E[Each record: type = STANDARD_CYCLE or OUT_OF_CYCLE]
+    D --> E
+    E --> F{isPrimary?}
+    F -->|Yes| G[Invoice-bearing result for that pay period]
+    F -->|No| H[Non-primary result — not used for billing]
+    G --> I[Invoice total = sum of all primary records in the month]
+```
 
-On the invoice breakdown, depending on the [[custom-invoice-format]] employees are not displayed with a single line item, we always display their amounts on a pay period level to ensure clarity on the amount
+## Exceptions and Edge Cases
+
+| Scenario | Behaviour | Notes |
+|---|---|---|
+| New starter joins mid-cycle | A prorated result may be generated for the partial pay period. | The pay period fields identify the specific period, and proration fields show the days worked. |
+| Employee is terminated during a pay period | A termination result is included in the final pay period record. | See [[termination-results]]. |
+| `isAggregated` is `true` | Multiple bi-weekly pay period results have been combined into a single aggregated monthly record. | This is used in specific aggregation scenarios and affects how records are read for reporting. |
+
+## Data Notes
+
+| Observation | Note |
+|---|---|
+| `payPeriodStart` and `payPeriodEnd` are null for monthly employees. | These fields are only populated for bi-weekly (`BI_WEEKLY`) pay period records. |
+| `calculationPeriod` defaults to `MONTHLY`. | US bi-weekly employees will have `BI_WEEKLY` explicitly set. |
+| Multiple records can exist for the same employee and invoice month. | One record per pay period within the month, plus potentially an aggregated record. |
+| `isPrimary` is `false` by default. | Only the designated primary record for each pay period is the invoice-facing result. |
+
+## Source Reference
+
+| File Path | Purpose |
+|---|---|
+| `packages/calculator/src/us-payroll.ts` | Implements the US bi-weekly payroll logic, including pay period identification and the 26-period-per-year constant. |
+| `prisma/schema.prisma` | Defines `InvoiceEmployeeRecordCalculationPeriod` with values `MONTHLY` and `BI_WEEKLY`, and the `payPeriodStart`, `payPeriodEnd`, `isAggregated`, and `isPrimary` fields on the `InvoiceEmployeeRecord` model. |
+
+> US bi-weekly payroll produces 26 pay periods per year, causing some invoice months to contain 3 pay periods and a correspondingly higher invoice total.
+
+## Related Pages
+
+| Page | Purpose |
+|---|---|
+| [[calculator-results]] | Documents all invoice result fields including pay period dates, `calculationPeriod`, `isAggregated`, and `isPrimary`. |
+| [[invoice-record-type]] | Documents the `type` values used to identify standard, out-of-cycle, and upcoming cycle records. |
+| [[totals-breakdown]] | Documents the salary totals structure that appears on each pay period result. |
+| [[termination-results]] | Documents termination payout handling for US employees during final pay periods. |
+| [[out-of-cycle]] | Documents out-of-cycle adjustments that can occur within a bi-weekly payroll schedule. |
