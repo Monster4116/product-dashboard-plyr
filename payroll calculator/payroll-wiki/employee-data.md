@@ -4,6 +4,8 @@
 
 Employee data contains the employee-level context captured at the time a calculator result is generated. It records who the employee is, where they are employed, which salary setup applies, and any special calculation flags relevant to the period. This object is calculation context, not payroll output — the actual calculated amounts are stored in the salary totals and contribution fields on the parent record.
 
+**Search Tags:** `employee data`, `employee snapshot`, `employee context`, `employeeData`, `salaryBasis`, `grossHourlySalary`, `otherAllowances`, `hourlyBasisContext`
+
 ## Product Context
 
 Payroll calculations depend on a snapshot of employee details that were current at the time the calculation ran. The employee data object provides that snapshot, ensuring that the calculator result remains a faithful record of what was known at calculation time even if the employee's details change later. It gives operations teams the information needed to understand salary basis, territory, allowances, leave context, and any hourly tracking setup without looking up the live employee record.

@@ -4,6 +4,8 @@
 
 The calculator result is the record Playroll generates for each employee per invoice period. It contains every calculated output for that employee in that period: salary totals in multiple currencies, employer and employee contributions, termination payouts where applicable, leave adjustment context, and the exchange rate context used during calculation. The record is the source of truth for what appears on a client invoice and what is paid to or on behalf of the employee.
 
+**Search Tags:** `calculator result`, `invoice result`, `invoice employee record`, `InvoiceEmployeeRecord`, `calculationPeriod`, `isPrimary`, `isAggregated`, `payPeriodStart`
+
 ## Product Context
 
 Clients and operators use the calculator result to understand exactly what was calculated for an employee in a given month or pay period. It provides a complete, auditable breakdown of salary, contributions, fees, and currency conversions, giving both Playroll operations teams and clients the data needed to verify invoice amounts, reconcile payments, and investigate discrepancies. Without this record, there would be no structured link between the payroll calculation engine and the invoice and payment systems.

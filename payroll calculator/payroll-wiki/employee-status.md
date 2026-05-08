@@ -4,6 +4,8 @@
 
 Employee status represents the current onboarding or employment lifecycle state of an employee record in Playroll. The `status` field on the employee record stores this value, and it is also captured on the [[calculator-results]] record at the time of invoice generation. Notable constraints: status advances through the lifecycle in a defined sequence, and only employees in certain statuses are eligible for payroll processing.
 
+**Search Tags:** `employee status`, `employment status`, `onboarding status`, `status`, `EMPLOYEE_SIGNED`, `EMPLOYEE_ON_NOTICE`, `EMPLOYEE_TERMINATED`, `EMPLOYER_SIGNED`
+
 ## Product Context
 
 The employee status determines where an employee sits in the Playroll onboarding and employment lifecycle. Clients and the Playroll operations team use it to understand whether an employee is actively employed, still onboarding, serving notice, or terminated. Payroll processing and invoice generation are gated by employee status — an employee who has not completed the onboarding process will not appear on an invoice. The status also drives operational workflows such as document collection, agreement signing, and termination processing.

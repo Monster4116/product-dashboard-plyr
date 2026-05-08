@@ -105,6 +105,51 @@ Within every page, sections follow this order:
 - Enum and type values: always in backticks — `HOURLY`, `STANDARD_CYCLE`.
 - Currency codes: always in backticks — `ZAR`, `USD`.
 
+### Search Tags and Alias Coverage
+
+Searchability is a first-class documentation requirement. Pages in this wiki must be easy to find through:
+
+- business-language search (`salary peg`, `foreign salary`, `billing currency`)
+- code-language search (`peggedSalaryType`, `foreignSalaryCurrencyCode`)
+- alternate spelling and punctuation (`salary-peg`, `foreign-currency`, `out of cycle`, `out-of-cycle`)
+
+To support this, every non-stub page in `payroll-wiki/` except `00-index.md`, `open-questions.md`, and `DOCUMENTATION_STANDARDS.md` must include a single search tag line immediately below the `## Overview` prose:
+
+```markdown
+**Search Tags:** `canonical phrase`, `alias phrase`, `hyphenated-alias`, `fieldName`, `ENUM_VALUE`
+```
+
+**Rules:**
+
+- Include 3-8 tags per page. Prefer the smallest set that materially improves findability.
+- Tag 1 must be the canonical business phrase for the page topic.
+- Include high-value aliases only: common synonyms, alternate phrasing, singular/plural variants when meaningfully different, and hyphenated/unhyphenated forms that a reviewer is likely to search for.
+- Include at least one code-facing search anchor when the codebase uses a different identifier from the business wording.
+- Keep tags as exact searchable strings. Do not write sentences inside the tag list.
+- Use lowercase for phrase tags unless the searchable token is a code identifier or enum value.
+- Do not invent synonyms that are not used in the codebase, product language, or internal documentation.
+
+**Example:**
+
+```markdown
+**Search Tags:** `salary peg`, `salary-peg`, `pegged salary`, `foreign salary`, `peggedSalaryType`, `ALLOWANCE`
+```
+
+### Controlled Vocabulary for Payroll Terms
+
+When a concept has a preferred business name, use that canonical phrase consistently in headings, tables, and the first sentence of the page. If the codebase or legacy docs use a different phrase, include the alias in the `**Search Tags:**` line and mention it once in the body where relevant.
+
+| Canonical Phrase | Must Also Cover When Relevant | Typical Code / Data Anchors |
+|---|---|---|
+| `salary peg` | `salary-peg`, `pegged salary`, `salary peg direct`, `salary peg via allowance` | `peggedSalaryType`, `peggedSalaryCurrencyCode`, `DIRECT`, `ALLOWANCE` |
+| `foreign salary` | `foreign-currency salary`, `foreign currency`, `paid in foreign currency` | `foreignSalaryCurrencyCode`, `foreignSalaryAmount`, `foreignToLocalExchangeRate` |
+| `billing currency` | `invoice currency`, `client billing currency` | `billingCurrencyCode`, `localToBillingExchangeRate`, `billingToLocalExchangeRate` |
+| `local currency` | `payroll currency`, `territory currency` | `localCurrencyCode` |
+| `conversion fee` | `currency conversion fee`, `transaction fee` | `invoiceConversionFeePercentage`, `totalExcludingPlayrollFee` |
+| `out-of-cycle` | `out of cycle`, `off-cycle` | `OUT_OF_CYCLE` |
+
+When a page touches one of these concepts, the page must use the canonical phrase in prose even if the source code uses a different identifier.
+
 ---
 
 ## 4. Page Types and Required Templates
@@ -144,6 +189,7 @@ Every page belongs to exactly one of four page types. The sections listed for ea
 - Sentence 1: what this object is and what it contains, in plain English.
 - Sentence 2: where it appears (name the parent record in plain text, not a wiki-link).
 - Sentence 3–4 (optional): what this page covers and what is deferred to other pages.
+- Immediately after the overview prose, add a `**Search Tags:**` line using the rules in Section 3 when the page is not a stub.
 
 **`## Product Context`**
 - 2–5 sentences. Plain English only — no field names or backtick references.
@@ -240,6 +286,7 @@ Every page belongs to exactly one of four page types. The sections listed for ea
 - Sentence 1: what this concept is in plain English.
 - Sentence 2: the one-line governing rule — use a blockquote `> Rule text` if concise.
 - Sentence 3–5: scope of this page and links to related pages for out-of-scope detail.
+- Immediately after the overview prose, add a `**Search Tags:**` line using the rules in Section 3.
 
 **`## Product Context`**
 - Required. Cannot be omitted on Concept / Logic pages.
@@ -334,6 +381,7 @@ Every page belongs to exactly one of four page types. The sections listed for ea
 - Sentence 1: what this enum represents and where it is used, in plain English.
 - Sentence 2: the field name (in backticks) that stores this value, with a `[[wiki-link]]` to the parent record.
 - Sentence 3 (optional): notable constraints on how the value is set.
+- Immediately after the overview prose, add a `**Search Tags:**` line using the rules in Section 3.
 
 **`## Product Context`**
 - 2–4 sentences.
@@ -626,6 +674,13 @@ Use `---` between sections only on long pages where the visual break aids readab
 | A field name belonging to a documented object | Reference the page: "`fieldName`. See [[object-page]]." |
 | A page that does not exist yet | Link to it and create a stub (Section 4.4). |
 
+### Search-Oriented Linking
+
+- When a concept has both a business phrase and a code identifier, include both on the page at least once.
+- Prefer the canonical business phrase in headings and explanatory prose.
+- Use the technical identifier in the nearest relevant table row, data note, or source reference context so repo search can find the page from either direction.
+- If a concept is commonly searched with punctuation variants, cover that in `**Search Tags:**` rather than repeating awkward prose throughout the page.
+
 ### Link Format
 
 - Use `[[kebab-case-file-name]]` without a display text alias unless grammar requires one.
@@ -863,7 +918,12 @@ Only complete pages may be cited as definitive sources in another page's `## Cor
 1. **Read `DOCUMENTATION_STANDARDS.md` first.** Do not begin writing a wiki page before reading this file.
 2. **Identify the page type** before writing.
 3. **Check for an existing page.** Read it before writing. Preserve accurate content; replace only what source material directly contradicts.
-4. **Map source material to page sections:**
+4. **Collect search anchors before writing.** For the page topic, identify:
+   - the canonical business phrase
+   - common aliases or alternate punctuation
+   - relevant field names, enum values, and code identifiers
+   - adjacent pages that use related terminology
+5. **Map source material to page sections:**
 
 | Source Content | Target Section |
 |---|---|
@@ -875,11 +935,37 @@ Only complete pages may be cited as definitive sources in another page's `## Cor
 | Edge case guards, try/catch | `## Exceptions and Edge Cases` |
 | Source file path | `## Source Reference` |
 
-5. **Apply business question auto-triggers** (see Section 5.5). Generate a `**[❓ BQ-N]**` marker, add to `## Open Questions`, and add to `open-questions.md` for each trigger found.
-6. **Preserve existing wiki-links.** Do not remove a `[[wiki-link]]` unless the relationship is genuinely no longer relevant.
-7. **Create stubs for new references.** If source material references a concept with no wiki page, create a stub and add it to `00-index.md`.
-8. **Update `00-index.md`** after creating or updating any page.
-9. **Do not document implementation internals.** Private variable names and non-observable implementation details must not appear in wiki pages.
+6. **Add or refresh the `Search Tags` line.** Ensure the final page includes the canonical phrase plus the highest-value aliases and code anchors from Step 4.
+7. **Apply business question auto-triggers** (see Section 5.5). Generate a `**[❓ BQ-N]**` marker, add to `## Open Questions`, and add to `open-questions.md` for each trigger found.
+8. **Preserve existing wiki-links.** Do not remove a `[[wiki-link]]` unless the relationship is genuinely no longer relevant.
+9. **Create stubs for new references.** If source material references a concept with no wiki page, create a stub and add it to `00-index.md`.
+10. **Update `00-index.md`** after creating or updating any page.
+11. **Do not document implementation internals.** Private variable names and non-observable implementation details must not appear in wiki pages.
+
+### Repo Search Procedure for Documentation Updates
+
+Before updating or creating a page, search the repo using the canonical phrase plus the alias set collected above. At minimum:
+
+1. Search the wiki for the business phrase and its aliases.
+2. Search the codebase for field names, enum values, and related implementation files.
+3. Search tests and fixtures for worked examples and edge cases.
+4. Search adjacent docs for existing wording that should stay consistent.
+
+For a topic like salary peg, the search set should include both business and code language, for example:
+
+```text
+salary peg
+salary-peg
+pegged salary
+foreign salary
+foreign-currency
+peggedSalaryType
+peggedSalaryCurrencyCode
+ALLOWANCE
+DIRECT
+```
+
+The final page should make at least the most important of those terms discoverable through the title, body prose, and `**Search Tags:**` line without stuffing the page.
 
 ### Handling Ambiguity in Source Code
 
@@ -912,6 +998,7 @@ Only complete pages may be cited as definitive sources in another page's `## Cor
 - [ ] No first-person pronouns.
 - [ ] All field names are in backticks.
 - [ ] All enum and type values are in backticks.
+- [ ] `**Search Tags:**` is present on every non-stub page and includes the canonical phrase plus the highest-value aliases/code anchors.
 - [ ] `## Overview` and `## Product Context` contain no field names or backtick references.
 - [ ] Concept / Logic pages end with a one-line rule blockquote before `## Related Pages`.
 

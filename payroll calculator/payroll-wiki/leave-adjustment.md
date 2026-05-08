@@ -4,6 +4,8 @@
 
 A leave adjustment is the net salary impact produced when approved leave is processed in payroll for a period. The calculator counts the leave days that fall within the payroll period, converts them into an effective day count after applying rounding rules, and then calculates a deduction and an addition based on configured daily rates and payout rules. The final adjustment is the difference between the total addition and the total deduction. This object is documented in [[calculator-results]] as `leavePayoutAdjustmentContext`.
 
+**Search Tags:** `leave adjustment`, `leave payout adjustment`, `leavePayoutAdjustmentContext`, `effectiveLeaveDays`, `rawLeaveDays`, `totalAddition`, `totalDeduction`, `historicalLeaveDays`
+
 ## Product Context
 
 Leave adjustments ensure that employee pay accurately reflects approved leave during the payroll period. Different leave types can be fully paid, partially paid, or unpaid — and some organisations use tiered payout structures where the payout rate changes after a certain number of days. The leave adjustment calculation captures all of this complexity in a single net figure that flows into the payroll salary totals. Without it, an employee taking unpaid or partially paid leave would still receive full salary on the invoice.

@@ -4,6 +4,8 @@
 
 The totals breakdown contains the calculated salary and invoice totals for an employee invoice result. It groups amounts across up to three currency representations — local, salary payment, and billing — along with day counts, a multiplier for partial periods, and the employee's take-home amount. The calculator result record can contain two totals breakdown fields: one for the full period and one for any prorated portion.
 
+**Search Tags:** `totals breakdown`, `salary totals`, `invoice totals`, `salaryTotalsFull`, `salaryTotalsProrated`, `totalsBillingCurrency`, `totalsSalaryPaymentCurrency`, `totalEmployeeTakeHome`
+
 ## Product Context
 
 Clients receive an invoice that reflects the full cost of employing each person, including salary, employer contributions, and Playroll fees, expressed in the billing currency. The totals breakdown is the structured data behind those invoice amounts. It also exposes the local-currency payroll figures needed for statutory compliance reporting and the salary payment currency figures needed for foreign salary arrangements. Having the totals in multiple currency representations in one object means clients and operations teams can trace how an amount moved from payroll to invoice without looking across multiple records.

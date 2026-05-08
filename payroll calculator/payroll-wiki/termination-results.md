@@ -4,6 +4,8 @@
 
 Termination results contain the termination-related payout context for an employee invoice result. This field is populated when termination or final-pay logic applies to an employee in the period. It can include leave payout, severance, notice pay, ex gratia payments, holiday allowance, bonus, or other miscellaneous termination amounts. This page documents the structure of the termination results object only. Detailed leave payout logic is documented in [[leave-payout]], and country-specific termination rules are documented in [[territory]].
 
+**Search Tags:** `termination results`, `termination payout`, `final pay`, `terminationResults`, `SEVERANCE`, `NOTICE_PAY`, `leaveDayPayout`, `EmployeeTerminationPayoutType`
+
 ## Product Context
 
 When an employee's employment ends, Playroll must calculate all final entitlements and include them in the last invoice. The amounts owed can vary significantly by territory — some countries require statutory severance pay, others mandate notice pay or holiday allowance payouts. By capturing these as structured payout line items, Playroll gives operations teams and clients full visibility into what was paid at termination and why. The amounts flow into the invoice totals so the client receives an accurate final bill.

@@ -4,6 +4,8 @@
 
 US employees are paid bi-weekly, meaning they are paid once every two weeks for a total of 26 pay periods per year. Because Playroll invoices clients on a monthly basis across 12 calendar months, the 26 bi-weekly pay periods do not divide evenly into 12 months. This mismatch means that most months contain 2 pay periods, but approximately 2 months per year contain 3 pay periods. Invoice totals for US employees vary month to month as a direct result of this structure.
 
+**Search Tags:** `usa pay periods`, `us pay periods`, `bi-weekly payroll`, `pay period`, `BI_WEEKLY`, `payPeriodStart`, `payPeriodEnd`, `isPrimary`
+
 ## Product Context
 
 Clients with US employees need to understand that invoice amounts will be higher in months that contain 3 pay periods, even when the employee's pay has not changed. This is not an error — it reflects the additional pay cycle within that month. The bi-weekly structure also means that invoice results are generated and tracked at the pay-period level, not the monthly level, to ensure accurate per-cycle reporting. Payroll operations teams use the pay period fields on each result record to identify which cycle a record belongs to and whether it is the primary invoice-facing result.
