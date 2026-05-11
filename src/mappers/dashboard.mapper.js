@@ -16,6 +16,23 @@ const toStringValue = (value, fallback = '') => {
 
 const toBoolean = (value) => Boolean(value);
 
+const toStringList = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => toStringValue(item, "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
 export const mapDashboardSummary = (rawItem = {}) => ({
   title: toStringValue(rawItem.title, 'Dashboard summary'),
   subtitle: toStringValue(rawItem.subtitle, ''),
@@ -125,6 +142,9 @@ export const mapFinanceAdjustment = (rawItem = {}) => ({
   employeeId: toStringValue(rawItem.employeeId, ''),
   territory: toStringValue(rawItem.territory, 'Unknown'),
   primaryAspect: toStringValue(rawItem.primaryAspect, 'Unknown'),
+  subCategoryCode: toStringValue(rawItem.subCategoryCode, ''),
+  detailedDescription: toStringValue(rawItem.detailedDescription, ''),
+  tags: toStringList(rawItem.tags),
   adjustmentUsd: toNumber(rawItem.adjustmentUsd, 0),
   absoluteAdjustmentUsd: toNumber(
     rawItem.absoluteAdjustmentUsd,

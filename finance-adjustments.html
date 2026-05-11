@@ -28,7 +28,8 @@ const { useEffect, useMemo, useRef, useState } = React;
 
 const CHART_COLORS = ['#5110DD','#36B1FF','#66BB6A','#FFA726','#AF91EF','#F44336','#29B6F6','#A3DBFF','#CCE8CD','#3A0B9D'];
 const FINANCE_ENV = window.__PUBLIC_CONFIG__?.appEnv ?? 'local';
-const FINANCE_CACHE_KEY = `dashboard.finance-adjustments.rows.v2.${FINANCE_ENV}`;
+const FINANCE_CACHE_KEY = `dashboard.finance-adjustments.rows.v3.${FINANCE_ENV}`;
+const TAXONOMY_PATH = 'data/finance-adjustment-taxonomy.csv';
 
 const fmt = {
   currency: n => {
@@ -115,7 +116,7 @@ const ErrorScreen = ({ message }) => (
     <div className="err-title">Failed to load finance adjustments</div>
     <div className="err-msg">{message}</div>
     <div className="err-msg" style={{ marginTop: 8 }}>
-      This page now reads through the shared frontend service layer using local mock data until the future API layer is ready.
+      This page reads through the shared frontend service layer and taxonomy reference asset. If the live dataset or taxonomy file cannot be reached, the drill-down views will not load correctly.
     </div>
   </div>
 );
@@ -147,26 +148,127 @@ function writeFinanceCache(rows) {
   }
 }
 
-const FinanceView = ({ rows }) => {
+function splitCsvLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      values.push(current);
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current);
+  return values.map(value => value.trim());
+}
+
+function parseCsv(text) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n').filter(Boolean);
+  if (!lines.length) return [];
+
+  const headers = splitCsvLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const values = splitCsvLine(line);
+    return headers.reduce((row, header, index) => {
+      row[header] = values[index] ?? '';
+      return row;
+    }, {});
+  });
+}
+
+function deriveCategoryCode(subCategoryCode) {
+  const parts = String(subCategoryCode || '').split('-').filter(Boolean);
+  return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : '';
+}
+
+async function loadFinanceTaxonomy() {
+  const response = await fetch(TAXONOMY_PATH, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Could not load finance adjustment taxonomy (${response.status})`);
+  }
+
+  return parseCsv(await response.text()).map(row => ({
+    primaryAspect: row['Primary Aspect'] || '',
+    categoryCode: row['Category Code'] || '',
+    subCategoryCode: row['Sub-Category Code'] || '',
+    subCategoryName: row['Sub-Category Name'] || '',
+    standardisedLabel: row['Standardised Label'] || '',
+    parentCategory: row['Parent Category'] || '',
+    definition: row['Definition'] || '',
+  }));
+}
+
+const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
   const theme = useDashboardTheme();
   const chartPalette = useMemo(() => getChartPalette(), [theme]);
   const [territory, setTerritory] = useState('');
   const [aspect, setAspect] = useState('');
+  const [parentCategory, setParentCategory] = useState('');
+  const [subCategoryCode, setSubCategoryCode] = useState('');
 
-  const territories = useMemo(() => [...new Set(rows.map(r => r.territory).filter(Boolean))].sort(), [rows]);
-  const aspects = useMemo(() => [...new Set(rows.map(r => r.primaryAspect).filter(Boolean))].sort(), [rows]);
+  const taxonomyLookup = useMemo(() => (
+    taxonomy.reduce((lookup, item) => {
+      if (item.subCategoryCode) lookup[item.subCategoryCode] = item;
+      return lookup;
+    }, {})
+  ), [taxonomy]);
 
-  const filtered = useMemo(() => rows.filter(r => {
+  const enrichedRows = useMemo(() => rows.map(row => {
+    const taxonomyMatch = taxonomyLookup[row.subCategoryCode] || null;
+    const fallbackCode = row.subCategoryCode || '';
+    const fallbackCategoryCode = deriveCategoryCode(fallbackCode);
+
+    return {
+      ...row,
+      categoryCode: taxonomyMatch?.categoryCode || fallbackCategoryCode,
+      subCategoryName: taxonomyMatch?.subCategoryName || fallbackCode || 'Unknown',
+      standardisedLabel: taxonomyMatch?.standardisedLabel || fallbackCode || 'Unclassified',
+      parentCategory: taxonomyMatch?.parentCategory || (fallbackCode ? 'Mapped outside reference' : 'Unclassified'),
+      definition: taxonomyMatch?.definition || row.detailedDescription || '',
+      hasTaxonomy: Boolean(fallbackCode && taxonomyMatch),
+    };
+  }), [rows, taxonomyLookup]);
+
+  const territories = useMemo(() => [...new Set(enrichedRows.map(r => r.territory).filter(Boolean))].sort(), [enrichedRows]);
+  const aspects = useMemo(() => [...new Set(enrichedRows.map(r => r.primaryAspect).filter(Boolean))].sort(), [enrichedRows]);
+  const parentCategories = useMemo(() => [...new Set(enrichedRows.map(r => r.parentCategory).filter(Boolean))].sort(), [enrichedRows]);
+  const subCategories = useMemo(() => (
+    [...new Set(enrichedRows.map(r => r.subCategoryCode).filter(Boolean))].sort()
+  ), [enrichedRows]);
+
+  const filtered = useMemo(() => enrichedRows.filter(r => {
     if (territory && r.territory !== territory) return false;
     if (aspect && r.primaryAspect !== aspect) return false;
+    if (parentCategory && r.parentCategory !== parentCategory) return false;
+    if (subCategoryCode && r.subCategoryCode !== subCategoryCode) return false;
     return true;
-  }), [rows, territory, aspect]);
+  }), [enrichedRows, territory, aspect, parentCategory, subCategoryCode]);
 
   const stats = useMemo(() => {
     const companies = new Set();
     const employees = new Set();
     const months = {};
     const aspectMap = {};
+    const parentCategoryMap = {};
+    let mappedCount = 0;
     let totalAbs = 0;
     let net = 0;
 
@@ -175,6 +277,7 @@ const FinanceView = ({ rows }) => {
       const abs = Number(r.absoluteAdjustmentUsd) || Math.abs(adj);
       totalAbs += abs;
       net += adj;
+      if (r.hasTaxonomy) mappedCount += 1;
       if (r.companyId) companies.add(r.companyId);
       if (r.employeeId) employees.add(r.employeeId);
 
@@ -189,6 +292,18 @@ const FinanceView = ({ rows }) => {
       aspectMap[pa].records += 1;
       aspectMap[pa].abs += abs;
       aspectMap[pa].net += adj;
+
+      const parent = r.parentCategory || 'Unclassified';
+      if (!parentCategoryMap[parent]) {
+        parentCategoryMap[parent] = { records: 0, abs: 0, net: 0, sampleCode: '', sampleLabel: '' };
+      }
+      parentCategoryMap[parent].records += 1;
+      parentCategoryMap[parent].abs += abs;
+      parentCategoryMap[parent].net += adj;
+      if (!parentCategoryMap[parent].sampleCode && r.subCategoryCode) {
+        parentCategoryMap[parent].sampleCode = r.subCategoryCode;
+        parentCategoryMap[parent].sampleLabel = r.standardisedLabel || r.subCategoryName || r.subCategoryCode;
+      }
     });
 
     return {
@@ -196,8 +311,13 @@ const FinanceView = ({ rows }) => {
       net,
       companies: companies.size,
       employees: employees.size,
+      mappedCount,
+      unmappedCount: Math.max(filtered.length - mappedCount, 0),
       months: Object.values(months).sort((a,b) => a.key.localeCompare(b.key)),
       aspects: Object.entries(aspectMap).map(([name, value]) => ({ name, ...value })).sort((a,b) => b.abs - a.abs),
+      parentCategories: Object.entries(parentCategoryMap)
+        .map(([name, value]) => ({ name, ...value }))
+        .sort((a,b) => b.abs - a.abs),
     };
   }, [filtered]);
 
@@ -222,11 +342,11 @@ const FinanceView = ({ rows }) => {
     }
   }), [stats, chartPalette]);
 
-  const aspectChart = useMemo(() => ({
+  const parentCategoryChart = useMemo(() => ({
     type: 'doughnut',
     data: {
-      labels: stats.aspects.slice(0, 8).map(a => a.name),
-      datasets: [{ data: stats.aspects.slice(0, 8).map(a => a.records), backgroundColor: CHART_COLORS, borderWidth: 0 }]
+      labels: stats.parentCategories.slice(0, 8).map(a => a.name),
+      datasets: [{ data: stats.parentCategories.slice(0, 8).map(a => a.records), backgroundColor: CHART_COLORS, borderWidth: 0 }]
     },
     options: {
       responsive: true,
@@ -242,7 +362,7 @@ const FinanceView = ({ rows }) => {
           <div className="eyebrow">Live dashboard</div>
           <h1 className="page-hero-title">Finance adjustments</h1>
           <p className="page-hero-copy">
-            Review adjustment volume, exposure and operational concentration across territories, companies and primary aspects.
+            Review adjustment volume, exposure and operational concentration across territories, primary aspects, and taxonomy-backed sub-categories.
           </p>
         </div>
         <div className="hero-stat-block">
@@ -256,7 +376,7 @@ const FinanceView = ({ rows }) => {
       <div className="section-header">
         <div>
           <h2 className="section-title">Filters</h2>
-          <p className="section-sub">Narrow the live dataset by territory and primary aspect.</p>
+          <p className="section-sub">Narrow the live dataset by top-level aspect, taxonomy parent category, and specific sub-category codes.</p>
         </div>
         <div style={{ display:'flex', gap: 10, flexWrap:'wrap' }}>
           <select className="f-select" value={territory} onChange={e => setTerritory(e.target.value)}>
@@ -267,16 +387,39 @@ const FinanceView = ({ rows }) => {
             <option value="">All aspects</option>
             {aspects.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
+          <select className="f-select" value={parentCategory} onChange={e => setParentCategory(e.target.value)}>
+            <option value="">All parent categories</option>
+            {parentCategories.map(item => <option key={item} value={item}>{item}</option>)}
+          </select>
+          <select className="f-select" value={subCategoryCode} onChange={e => setSubCategoryCode(e.target.value)}>
+            <option value="">All taxonomy codes</option>
+            {subCategories.map(code => <option key={code} value={code}>{code}</option>)}
+          </select>
         </div>
       </div>
+
+      {(taxonomyError || stats.unmappedCount > 0) && (
+        <div className="chart-card" style={{ paddingBottom: 16 }}>
+          <div className="chart-title">Taxonomy coverage</div>
+          {taxonomyError ? (
+            <p style={{ color:'var(--color-error-main)', fontSize:'0.8125rem' }}>
+              Taxonomy reference could not be loaded, so the page is showing live finance adjustments without taxonomy enrichment.
+            </p>
+          ) : (
+            <p style={{ color:'var(--text-secondary)', fontSize:'0.8125rem', lineHeight:1.6 }}>
+              {fmt.number(stats.mappedCount)} filtered records are mapped to the local taxonomy reference and {fmt.number(stats.unmappedCount)} remain top-level only.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="kpi-grid">
         <KPICard label="Records" value={fmt.number(filtered.length)} sub="Filtered adjustments" />
         <KPICard label="Absolute exposure" value={fmt.currency(stats.totalAbs)} sub="Total magnitude" />
         <KPICard label="Net exposure" value={fmt.currency(stats.net)} sign={stats.net >= 0 ? 'pos' : 'neg'} />
         <KPICard label="Avg adjustment" value={fmt.currency(filtered.length ? stats.totalAbs / filtered.length : 0)} />
-        <KPICard label="Companies" value={fmt.number(stats.companies)} />
-        <KPICard label="Employees" value={fmt.number(stats.employees)} />
+        <KPICard label="Parent categories" value={fmt.number(stats.parentCategories.length)} />
+        <KPICard label="Mapped rows" value={fmt.number(stats.mappedCount)} sub={`${fmt.number(stats.unmappedCount)} unmapped`} />
       </div>
 
       <div className="charts-row">
@@ -285,30 +428,53 @@ const FinanceView = ({ rows }) => {
           <ChartCanvas config={monthlyChart} />
         </div>
         <div className="chart-card" style={{ flex: 1 }}>
-          <div className="chart-title">Records by primary aspect</div>
-          <ChartCanvas config={aspectChart} />
+          <div className="chart-title">Records by parent category</div>
+          <ChartCanvas config={parentCategoryChart} />
         </div>
       </div>
 
       <div className="chart-card">
-        <div className="chart-title">Exposure by primary aspect</div>
+        <div className="chart-title">Exposure by taxonomy parent category</div>
         <div className="table-wrap" style={{ marginBottom: 0 }}>
           <table className="data-table">
-            <thead><tr><th>Primary aspect</th><th className="r">Records</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th></tr></thead>
+            <thead><tr><th>Parent category</th><th>Example taxonomy</th><th className="r">Records</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th></tr></thead>
             <tbody>
-              {stats.aspects.map(a => <tr key={a.name}><td>{a.name}</td><td className="r">{fmt.number(a.records)}</td><td className="r">{fmt.currency(a.abs)}</td><td className={`r ${a.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(a.net)}</td><td className="r">{fmt.currency(a.records ? a.abs / a.records : 0)}</td></tr>)}
+              {stats.parentCategories.map(item => (
+                <tr key={item.name}>
+                  <td>{item.name}</td>
+                  <td title={item.sampleLabel || ''}>{item.sampleCode || '---'}</td>
+                  <td className="r">{fmt.number(item.records)}</td>
+                  <td className="r">{fmt.currency(item.abs)}</td>
+                  <td className={`r ${item.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(item.net)}</td>
+                  <td className="r">{fmt.currency(item.records ? item.abs / item.records : 0)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
 
       <div className="chart-card">
-        <div className="chart-title">Latest adjustment records</div>
+        <div className="chart-title">Latest adjustment records with taxonomy detail</div>
         <div className="table-wrap" style={{ marginBottom: 0 }}>
           <table className="data-table">
-            <thead><tr><th>Month</th><th>CO ID</th><th>EE ID</th><th>Territory</th><th>Aspect</th><th className="r">Adjustment USD</th><th className="r">Confidence</th></tr></thead>
+            <thead><tr><th>Month</th><th>Territory</th><th>Aspect</th><th>Taxonomy code</th><th>Standardised label</th><th>Description</th><th className="r">Adjustment USD</th><th className="r">Confidence</th></tr></thead>
             <tbody>
-              {filtered.slice(0, 50).map(r => <tr key={`${r.month}-${r.companyId}-${r.employeeId}-${r.primaryAspect}`}><td>{r.month}</td><td>{r.companyId}</td><td>{r.employeeId}</td><td>{r.territory}</td><td>{r.primaryAspect || 'Unknown'}</td><td className={`r ${(Number(r.adjustmentUsd) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(r.adjustmentUsd)}</td><td className="r">{r.confidence == null ? '---' : fmt.pct(Number(r.confidence) * 100)}</td></tr>)}
+              {filtered.slice(0, 75).map(r => (
+                <tr key={`${r.month}-${r.companyId}-${r.employeeId}-${r.primaryAspect}-${r.subCategoryCode || 'na'}`}>
+                  <td>{r.month}</td>
+                  <td>{r.territory}</td>
+                  <td>{r.primaryAspect || 'Unknown'}</td>
+                  <td>{r.subCategoryCode || '---'}</td>
+                  <td title={r.parentCategory || ''}>{r.standardisedLabel || 'Unclassified'}</td>
+                  <td title={r.definition || r.detailedDescription || ''}>
+                    {(r.definition || r.detailedDescription || '---').slice(0, 120)}
+                    {(r.definition || r.detailedDescription || '').length > 120 ? '…' : ''}
+                  </td>
+                  <td className={`r ${(Number(r.adjustmentUsd) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(r.adjustmentUsd)}</td>
+                  <td className="r">{r.confidence == null ? '---' : fmt.pct(Number(r.confidence) * 100)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -321,13 +487,20 @@ const App = () => {
   const [financeRows, setFinanceRows] = useState(() => readFinanceCache());
   const [loading, setLoading] = useState(() => readFinanceCache().length === 0);
   const [error, setError] = useState('');
+  const [taxonomy, setTaxonomy] = useState([]);
+  const [taxonomyError, setTaxonomyError] = useState('');
 
   useEffect(() => {
     const load = async () => {
       try {
         const cachedRows = readFinanceCache();
+        const taxonomyPromise = loadFinanceTaxonomy()
+          .then(rows => setTaxonomy(rows))
+          .catch(err => setTaxonomyError(err.message || String(err)));
+
         if (cachedRows.length) {
           setFinanceRows(cachedRows);
+          await taxonomyPromise;
           setLoading(false);
           return;
         }
@@ -336,13 +509,13 @@ const App = () => {
           throw new Error('The shared dashboard service is not available in the browser yet.');
         }
 
-        // Today this loads local mock data through the shared frontend service.
-        // In the next backend phase, the same service function can switch to
-        // a real API request through the configured API boundary without
-        // scattering backend details across the page.
+        // The shared service keeps the page independent from the backend shape.
+        // The live finance-adjustments Edge Function can evolve without
+        // scattering database-specific assumptions across the page itself.
         const finance = await window.dashboardApi.getFinanceAdjustments();
         setFinanceRows(finance);
         writeFinanceCache(finance);
+        await taxonomyPromise;
       } catch (e) {
         setError(e.message || String(e));
       } finally {
@@ -367,7 +540,7 @@ const App = () => {
           <a className="header-link" href="index.html">Back to home</a>
         </header>
         <section className="app-main">
-          {loading ? <LoadingScreen /> : error ? <ErrorScreen message={error} /> : <FinanceView rows={financeRows} />}
+          {loading ? <LoadingScreen /> : error ? <ErrorScreen message={error} /> : <FinanceView rows={financeRows} taxonomy={taxonomy} taxonomyError={taxonomyError} />}
         </section>
       </main>
     </div>

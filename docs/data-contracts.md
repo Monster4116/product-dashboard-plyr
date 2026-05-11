@@ -77,6 +77,9 @@ Example finance adjustment item:
   "employeeId": "EE-456",
   "territory": "United Kingdom",
   "primaryAspect": "Payroll correction",
+  "subCategoryCode": "PB-RC-01",
+  "detailedDescription": "Correction for an error or omission in a prior month's payroll.",
+  "tags": ["PriorPeriod", "PayrollCorrection"],
   "adjustmentUsd": -1200,
   "absoluteAdjustmentUsd": 1200,
   "confidence": 0.94
@@ -110,6 +113,9 @@ Mapper steps:
   employeeId = EE_ID
   territory = TERRITORY or "Unknown"
   primaryAspect = PRIMARY_ASPECT or "Unknown"
+  subCategoryCode = SUB_CAT_CODE
+  detailedDescription = DETAILED_DESCRIPTION
+  tags = split TAGS into a stable string list
   adjustmentUsd = numeric value of ADJUSTMENT_USD
   absoluteAdjustmentUsd = numeric value of ABS_ADJUSTMENT_USD
   confidence = numeric value of CONFIDENCE

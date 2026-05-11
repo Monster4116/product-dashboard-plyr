@@ -1,0 +1,58 @@
+{
+    "result": {
+        "byLeaveType": {
+            "UNPAID_LEAVE": {
+                "historicalLeaveDays": 0,
+                "adjustment": -18692.30769230769,
+                "totalDeduction": 18692.30769230769,
+                "totalAddition": 0,
+                "effectiveLeaveDays": 27,
+                "rawLeaveDays": 27,
+                "dailyDeduction": 692.3076923076923,
+                "dailyAddition": 0,
+                "tierAllocations": [
+                    {
+                        "days": 27,
+                        "rate": 0,
+                        "tierIndex": 0
+                    }
+                ]
+            }
+        },
+        "combined": {
+            "adjustment": -18692.30769230769,
+            "totalDeduction": 18692.30769230769,
+            "totalAddition": 0
+        }
+    },
+    "leaveTypeConfigs": {
+        "UNPAID_LEAVE": {
+            "enabled": true,
+            "limitType": "NONE",
+            "roundingMode": "NONE",
+            "payoutRateOptions": {
+                "flatPayoutRate": 0,
+                "useTieredPayoutRates": false
+            },
+            "dailyAmountCalculation": {
+                "salaryAddition": {
+                    "base": "0",
+                    "divisor": "1",
+                    "baseResolved": 0,
+                    "divisorResolved": 1
+                },
+                "salaryDeduction": {
+                    "base": "${payPeriodGrossSalary}",
+                    "divisor": "${totalWorkingDays}",
+                    "baseResolved": 6923.076923076923,
+                    "divisorResolved": 10
+                },
+                "useDefaultTerritoryApportionment": false
+            }
+        }
+    },
+    "retroactivelyIncludedLeaveIds": [
+        "484b9505-88b0-498b-80e1-948b93775148",
+        "6922772a-bb8e-45e4-b2b2-4e86cf32435e"
+    ]
+}
