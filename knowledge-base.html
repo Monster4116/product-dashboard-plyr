@@ -269,12 +269,12 @@ function buildTableHtml(lines, context) {
   return `<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
 }
 
-function renderMarkdown(raw) {
+function renderMarkdown(raw, sharedState = {}) {
   const lines = raw.replace(/\r\n/g, '\n').split('\n');
   const htmlParts = [];
-  const outline = [];
-  const relatedSet = new Set();
-  const unresolvedSet = new Set();
+  const outline = sharedState.outline || [];
+  const relatedSet = sharedState.relatedSet || new Set();
+  const unresolvedSet = sharedState.unresolvedSet || new Set();
   const context = { relatedSet, unresolvedSet };
 
   let paragraphLines = [];
@@ -319,7 +319,8 @@ function renderMarkdown(raw) {
     codeLines = [];
   };
 
-  lines.forEach(line => {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const trimmed = line.trim();
 
     if (inCodeBlock) {
@@ -329,7 +330,7 @@ function renderMarkdown(raw) {
       } else {
         codeLines.push(line);
       }
-      return;
+      continue;
     }
 
     if (trimmed.startsWith('```')) {
@@ -338,14 +339,56 @@ function renderMarkdown(raw) {
       flushTable();
       inCodeBlock = true;
       codeLines = [];
-      return;
+      continue;
+    }
+
+    if (trimmed === '<details>') {
+      flushParagraph();
+      flushList();
+      flushTable();
+
+      let summary = 'More details';
+      const detailLines = [];
+
+      while (index + 1 < lines.length) {
+        index += 1;
+        const detailLine = lines[index];
+        const detailTrimmed = detailLine.trim();
+
+        if (!detailTrimmed) {
+          detailLines.push(detailLine);
+          continue;
+        }
+
+        const summaryMatch = detailTrimmed.match(/^<summary>([\s\S]*?)<\/summary>$/i);
+        if (summaryMatch) {
+          summary = summaryMatch[1].trim() || summary;
+          break;
+        }
+
+        detailLines.push(detailLine);
+        break;
+      }
+
+      while (index + 1 < lines.length) {
+        index += 1;
+        const detailLine = lines[index];
+        if (detailLine.trim() === '</details>') break;
+        detailLines.push(detailLine);
+      }
+
+      const detailBody = renderMarkdown(detailLines.join('\n'), { outline, relatedSet, unresolvedSet });
+      htmlParts.push(
+        `<details class="kb-details"><summary>${parseInline(summary, context)}</summary><div class="kb-details-body">${detailBody.html}</div></details>`
+      );
+      continue;
     }
 
     if (!trimmed) {
       flushParagraph();
       flushList();
       flushTable();
-      return;
+      continue;
     }
 
     if (/^---+$/.test(trimmed)) {
@@ -353,7 +396,7 @@ function renderMarkdown(raw) {
       flushList();
       flushTable();
       htmlParts.push('<hr>');
-      return;
+      continue;
     }
 
     const headingMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
@@ -366,14 +409,14 @@ function renderMarkdown(raw) {
       const headingId = slugifyHeading(headingText);
       outline.push({ level, id: headingId, text: headingText });
       htmlParts.push(`<h${level} id="${headingId}">${parseInline(headingText, context)}</h${level}>`);
-      return;
+      continue;
     }
 
     if (/^\|.*\|$/.test(trimmed)) {
       flushParagraph();
       flushList();
       tableLines.push(trimmed);
-      return;
+      continue;
     }
 
     const listMatch = trimmed.match(/^[-*]\s+(.*)$/);
@@ -381,11 +424,11 @@ function renderMarkdown(raw) {
       flushParagraph();
       flushTable();
       listItems.push(listMatch[1]);
-      return;
+      continue;
     }
 
     paragraphLines.push(trimmed);
-  });
+  }
 
   flushParagraph();
   flushList();
@@ -443,6 +486,8 @@ const ErrorScreen = ({ message }) => (
 
 function KnowledgeBaseView() {
   const [query, setQuery] = useState('');
+  const [showBrowse, setShowBrowse] = useState(true);
+  const [showOutline, setShowOutline] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState(() => {
     const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('doc');
     return DOC_MAP[fromHash] ? fromHash : '00-index';
@@ -570,6 +615,9 @@ function KnowledgeBaseView() {
     : [];
 
   const unresolvedRefs = article ? article.unresolvedSlugs : [];
+  const hasOutline = Boolean(article?.outline?.length);
+  const layoutClassName = `kb-layout${showBrowse ? '' : ' sidebar-collapsed'}`;
+  const articleGridClassName = `kb-article-grid${showOutline && hasOutline ? '' : ' outline-collapsed'}`;
 
   return (
     <div className="tab-content tab-content-docs">
@@ -596,52 +644,78 @@ function KnowledgeBaseView() {
         </div>
       </div>
 
-      <section className="kb-layout">
-        <aside className="kb-sidebar-panel">
-          <div className="kb-sidebar-top">
-            <span className="sidebar-section-label" style={{ padding: 0 }}>Browse articles</span>
-            <p>
-              This first version is focused on the imported payroll wiki. It keeps the content readable now while leaving space for the wider repo docs to join the same experience later.
-            </p>
-            <input
-              className="f-input kb-search"
-              type="search"
-              placeholder="Search articles, categories or concepts"
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-            />
-            <div className="kb-result-note">{filteredDocs.length} of {DOC_LIBRARY.length} articles shown</div>
-          </div>
+      <section className={layoutClassName}>
+        {showBrowse ? (
+          <aside className="kb-sidebar-panel">
+            <div className="kb-sidebar-top">
+              <span className="sidebar-section-label" style={{ padding: 0 }}>Browse articles</span>
+              <p>
+                This first version is focused on the imported payroll wiki. It keeps the content readable now while leaving space for the wider repo docs to join the same experience later.
+              </p>
+              <input
+                className="f-input kb-search"
+                type="search"
+                placeholder="Search articles, categories or concepts"
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+              />
+              <div className="kb-result-note">{filteredDocs.length} of {DOC_LIBRARY.length} articles shown</div>
+            </div>
 
-          <div className="kb-sidebar-body">
-            {Object.keys(groupedDocs).length === 0 ? (
-              <div className="kb-empty-state">No articles matched that search.</div>
-            ) : (
-              Object.entries(groupedDocs).map(([groupName, docs]) => (
-                <section className="kb-doc-group" key={groupName}>
-                  <span className="kb-doc-group-label">{groupName}</span>
-                  <div className="kb-doc-list">
-                    {docs.map(doc => (
-                      <button
-                        key={doc.slug}
-                        className={`kb-doc-button${doc.slug === selectedSlug ? ' active' : ''}`}
-                        type="button"
-                        onClick={() => openDoc(doc.slug)}
-                      >
-                        <span className="kb-doc-title">{doc.title}</span>
-                        <span className="kb-doc-summary">{doc.summary}</span>
-                        <span className="kb-doc-meta">
-                          <span className="kb-doc-chip">{doc.category}</span>
-                          <span className="kb-doc-chip">{doc.file}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ))
+            <div className="kb-sidebar-body">
+              {Object.keys(groupedDocs).length === 0 ? (
+                <div className="kb-empty-state">No articles matched that search.</div>
+              ) : (
+                Object.entries(groupedDocs).map(([groupName, docs]) => (
+                  <section className="kb-doc-group" key={groupName}>
+                    <span className="kb-doc-group-label">{groupName}</span>
+                    <div className="kb-doc-list">
+                      {docs.map(doc => (
+                        <button
+                          key={doc.slug}
+                          className={`kb-doc-button${doc.slug === selectedSlug ? ' active' : ''}`}
+                          type="button"
+                          onClick={() => openDoc(doc.slug)}
+                        >
+                          <span className="kb-doc-title">{doc.title}</span>
+                          <span className="kb-doc-summary">{doc.summary}</span>
+                          <span className="kb-doc-meta">
+                            <span className="kb-doc-chip">{doc.category}</span>
+                            <span className="kb-doc-chip">{doc.file}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
+            </div>
+          </aside>
+        ) : (
+          <aside className="kb-sidebar-rail" aria-label="Browse rail">
+            <button
+              className="kb-rail-toggle"
+              type="button"
+              onClick={() => setShowBrowse(true)}
+            >
+              Browse
+            </button>
+            <div className="kb-rail-meta">
+              <span className="kb-rail-count">{filteredDocs.length}</span>
+              <span className="kb-rail-label">shown</span>
+            </div>
+            {query.trim() && (
+              <button
+                className="kb-rail-clear"
+                type="button"
+                onClick={() => setQuery('')}
+                title="Clear search"
+              >
+                Clear
+              </button>
             )}
-          </div>
-        </aside>
+          </aside>
+        )}
 
         <article className="kb-article-panel">
           {loading ? (
@@ -653,6 +727,26 @@ function KnowledgeBaseView() {
               <div className="kb-article-head">
                 <h2>{article.title}</h2>
                 <p>{article.summary}</p>
+                <div className="kb-view-controls">
+                  <span className="kb-view-controls-label">View</span>
+                  <button
+                    className={`kb-view-toggle${showBrowse ? ' active' : ''}`}
+                    type="button"
+                    onClick={() => setShowBrowse(current => !current)}
+                    aria-pressed={showBrowse}
+                  >
+                    {showBrowse ? 'Hide browse' : 'Show browse'}
+                  </button>
+                  <button
+                    className={`kb-view-toggle${showOutline && hasOutline ? ' active' : ''}`}
+                    type="button"
+                    onClick={() => setShowOutline(current => !current)}
+                    aria-pressed={showOutline && hasOutline}
+                    disabled={!hasOutline}
+                  >
+                    {showOutline && hasOutline ? 'Hide outline' : 'Show outline'}
+                  </button>
+                </div>
                 <div className="kb-article-meta">
                   <span className="kb-doc-chip">{article.category}</span>
                   <span className="kb-doc-chip">{article.file}</span>
@@ -667,7 +761,7 @@ function KnowledgeBaseView() {
               </div>
 
               <div className="kb-article-body">
-                <div className="kb-article-grid">
+                <div className={articleGridClassName}>
                   <div className="kb-article-copy">
                     <div
                       className="kb-markdown"
@@ -727,9 +821,9 @@ function KnowledgeBaseView() {
                     </div>
                   </div>
 
-                  <aside className="kb-outline">
-                    <span className="kb-outline-title">On this page</span>
-                    {article.outline.length ? (
+                  {showOutline && hasOutline && (
+                    <aside className="kb-outline">
+                      <span className="kb-outline-title">On this page</span>
                       <nav className="kb-outline-list">
                         {article.outline.map(item => (
                           <button
@@ -742,10 +836,8 @@ function KnowledgeBaseView() {
                           </button>
                         ))}
                       </nav>
-                    ) : (
-                      <div className="kb-result-note">No section headings were found in this article.</div>
-                    )}
-                  </aside>
+                    </aside>
+                  )}
                 </div>
               </div>
             </>
