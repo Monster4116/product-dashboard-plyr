@@ -2116,7 +2116,11 @@ body[data-theme="dark"] .nps-badge.detractor{
   gap:18px;
   align-items:start;
 }
+.kb-layout.sidebar-collapsed{
+  grid-template-columns:68px minmax(0,1fr);
+}
 .kb-sidebar-panel,
+.kb-sidebar-rail,
 .kb-article-panel{
   background:var(--bg-paper);
   border-radius:var(--radius);
@@ -2141,6 +2145,60 @@ body[data-theme="dark"] .nps-badge.detractor{
   max-height:calc(100vh - 170px);
   overflow:auto;
   padding:14px;
+}
+.kb-sidebar-rail{
+  position:sticky;
+  top:84px;
+  padding:12px 10px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:14px;
+}
+.kb-rail-toggle,
+.kb-rail-clear{
+  width:100%;
+  border:1px solid var(--surface-high);
+  border-radius:14px;
+  background:var(--bg-paper);
+  color:var(--text-secondary);
+  padding:10px 6px;
+  font-size:0.6875rem;
+  font-weight:700;
+  line-height:1.2;
+  text-align:center;
+  cursor:pointer;
+  transition:border-color .15s ease, background .15s ease, color .15s ease, transform .15s ease;
+}
+.kb-rail-toggle:hover,
+.kb-rail-clear:hover{
+  border-color:var(--container-outline);
+  color:var(--text-primary);
+  background:var(--surface-low);
+  transform:translateY(-1px);
+}
+.kb-rail-meta{
+  width:100%;
+  padding:10px 6px;
+  border-radius:14px;
+  background:var(--surface-low);
+  text-align:center;
+}
+.kb-rail-count{
+  display:block;
+  color:var(--text-primary);
+  font-size:1rem;
+  font-weight:700;
+  line-height:1;
+}
+.kb-rail-label{
+  display:block;
+  margin-top:6px;
+  color:var(--text-secondary);
+  font-size:0.625rem;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
 }
 .kb-search{
   width:100%;
@@ -2254,6 +2312,46 @@ body[data-theme="dark"] .nps-badge.detractor{
   flex-wrap:wrap;
   margin-top:14px;
 }
+.kb-view-controls{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:16px;
+}
+.kb-view-controls-label{
+  color:var(--text-secondary);
+  font-size:0.6875rem;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.kb-view-toggle{
+  border:1px solid var(--surface-high);
+  border-radius:999px;
+  background:var(--bg-paper);
+  color:var(--text-secondary);
+  padding:8px 12px;
+  font-size:0.75rem;
+  font-weight:700;
+  line-height:1;
+  cursor:pointer;
+  transition:border-color .15s ease, background .15s ease, color .15s ease, transform .15s ease;
+}
+.kb-view-toggle:hover:not(:disabled){
+  border-color:var(--container-outline);
+  color:var(--text-primary);
+  transform:translateY(-1px);
+}
+.kb-view-toggle.active{
+  border-color:rgba(81,16,221,0.28);
+  background:#5110DD12;
+  color:var(--color-primary-main);
+}
+.kb-view-toggle:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
 .kb-article-body{
   padding:24px;
 }
@@ -2263,8 +2361,14 @@ body[data-theme="dark"] .nps-badge.detractor{
   gap:22px;
   align-items:start;
 }
+.kb-article-grid.outline-collapsed{
+  grid-template-columns:minmax(0,1fr);
+}
 .kb-article-copy{
   min-width:0;
+}
+.kb-layout.sidebar-collapsed .kb-article-head p{
+  max-width:none;
 }
 .kb-outline{
   position:sticky;
@@ -2364,6 +2468,40 @@ body[data-theme="dark"] .nps-badge.detractor{
   border-collapse:collapse;
   margin:14px 0 22px;
   font-size:0.8125rem;
+}
+.kb-markdown .kb-details{
+  margin:18px 0 22px;
+  border:1px solid var(--surface-high);
+  border-radius:16px;
+  background:var(--surface-low);
+  overflow:hidden;
+}
+.kb-markdown .kb-details summary{
+  cursor:pointer;
+  list-style:none;
+  padding:14px 16px;
+  font-size:0.875rem;
+  font-weight:700;
+  color:var(--text-primary);
+}
+.kb-markdown .kb-details summary::-webkit-details-marker{
+  display:none;
+}
+.kb-markdown .kb-details summary::before{
+  content:'▸';
+  display:inline-block;
+  margin-right:8px;
+  color:var(--color-primary-main);
+  transition:transform 160ms ease;
+}
+.kb-markdown .kb-details[open] summary::before{
+  transform:rotate(90deg);
+}
+.kb-markdown .kb-details-body{
+  padding:0 16px 16px;
+}
+.kb-markdown .kb-details-body > :first-child{
+  margin-top:0;
 }
 .kb-markdown thead{
   background:var(--surface-low);
@@ -2590,6 +2728,7 @@ body[data-theme="dark"] .kb-unresolved-chip{
     grid-template-columns:1fr;
   }
   .kb-sidebar-panel,
+  .kb-sidebar-rail,
   .kb-outline{
     position:static;
   }
