@@ -19,6 +19,8 @@
   - `src/services/dashboard-api.browser.js`
 - Shared mapper layer for stable dashboard contracts:
   - `src/mappers/dashboard.mapper.js`
+- Edge Function source now tracked in repo for live datasets:
+  - `api/edge-functions/finance-adjustments/index.ts`
 - Local mock data for safe runtime testing:
   - `src/services/mock-data/dashboard.mock.js`
 - Repo governance and review support:
@@ -41,10 +43,10 @@
 
 ## Implemented Outside This Repo
 
-- Supabase Edge Function: `finance-adjustments` (version 2, status: ACTIVE)
-  - Deployed to the Supabase project. Not tracked in this repo's source files.
+- Supabase Edge Function: `finance-adjustments` (currently deployed from the repo-tracked source)
+  - Deployed to the Supabase project.
   - Acts as the first real server-side API boundary for the finance adjustments dataset.
-  - Implements the adapter layer: queries `finance_adjustments_data`, maps raw DB column names to the stable dashboard contract, and returns only the fields the UI needs.
+  - Implements the adapter layer: queries `finance_adjustments_data`, maps raw DB column names to the stable dashboard contract, and returns the fields the UI needs for taxonomy-aware drilldown.
   - The `service_role` key is injected automatically by the Supabase Edge Function runtime and never touches this repo or browser code.
   - The frontend calls this function in production mode via `window.__PUBLIC_CONFIG__.apiBaseUrl`.
 
