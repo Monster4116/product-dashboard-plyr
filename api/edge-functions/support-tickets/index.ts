@@ -22,6 +22,13 @@ const PROCESS_FLAGS = [
   "has_conflicting_dates",
 ];
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 type RawTicketRow = {
   ticket_id: string;
   ticket_created_at: string | null;
@@ -147,15 +154,6 @@ async function fetchAllRows<T>(
   }
 
   return allRows;
-}
-
-async function fetchRowCount(supabase: ReturnType<typeof createClient>, table: string) {
-  const { count, error } = await supabase
-    .from(table)
-    .select("*", { count: "exact", head: true });
-
-  if (error) throw error;
-  return count ?? 0;
 }
 
 const buildTrend = (rows: SupportRow[]) => {
@@ -298,10 +296,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method !== "GET") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
   try {
@@ -314,12 +309,18 @@ Deno.serve(async (req: Request) => {
     };
     const insightLimit = Math.max(1, Math.min(20, toNumber(url.searchParams.get("insightLimit"), 8)));
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    const [aiRows, rawTicketRows, aiContextRows] = await Promise.all([
+    if (!supabaseUrl || !serviceRoleKey) {
+      return jsonResponse({ error: "Supabase environment is not configured." }, 500);
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+
+    const [aiRows, rawRows] = await Promise.all([
       fetchAllRows<AiContextRow>(
         supabase,
         "ai_support_ticket_context",
@@ -340,19 +341,38 @@ Deno.serve(async (req: Request) => {
           "context_quality",
           "ai_context_version",
           "model_name",
-          "support_tickets_v2(ticket_id,ticket_created_at,ticket_updated_at,status,priority,country,via_channel,satisfaction_score,customer_platform_uuid,existing_top_level_category,existing_subcategory,existing_severity,existing_relevant_department,requestor_type)",
         ].join(","),
         "ticket_created_at",
       ),
-      fetchRowCount(supabase, "support_tickets_v2"),
-      fetchRowCount(supabase, "ai_support_ticket_context"),
+      fetchAllRows<RawTicketRow>(
+        supabase,
+        "support_tickets_v2",
+        [
+          "ticket_id",
+          "ticket_created_at",
+          "ticket_updated_at",
+          "status",
+          "priority",
+          "country",
+          "via_channel",
+          "satisfaction_score",
+          "customer_platform_uuid",
+          "existing_top_level_category",
+          "existing_subcategory",
+          "existing_severity",
+          "existing_relevant_department",
+          "requestor_type",
+        ].join(","),
+        "ticket_created_at",
+      ),
     ]);
 
+    const rawRowsByTicketId = new Map(
+      rawRows.map((row) => [row.ticket_id, row]),
+    );
     const baseRows = aiRows.map((row): SupportRow => ({
       ...row,
-      raw: Array.isArray(row.support_tickets_v2)
-        ? row.support_tickets_v2[0]
-        : row.support_tickets_v2 ?? undefined,
+      raw: rawRowsByTicketId.get(row.source_ticket_id),
     }));
     const rows = filterRows(baseRows, filters);
     const dates = rows.map((row) => getDateTime(row.ticket_created_at)).filter(Boolean);
@@ -372,7 +392,7 @@ Deno.serve(async (req: Request) => {
     const requiresInternalHandoff = rows.filter((row) => getFlag(row, "requires_internal_handoff")).length;
     const requiresClientInstruction = rows.filter((row) => getFlag(row, "requires_client_instruction")).length;
 
-    return new Response(JSON.stringify({
+    return jsonResponse({
       summary: {
         windowStart,
         windowEnd,
@@ -401,10 +421,10 @@ Deno.serve(async (req: Request) => {
       },
       insights: buildInsights(rows, insightLimit),
       dataQuality: {
-        rawTicketRows,
-        aiContextRows,
+        rawTicketRows: rawRows.length,
+        aiContextRows: aiRows.length,
         filteredAiContextRows: rows.length,
-        aiCoveragePct: rawTicketRows ? Number((aiContextRows / rawTicketRows).toFixed(4)) : 0,
+        aiCoveragePct: rawRows.length ? Number((aiRows.length / rawRows.length).toFixed(4)) : 0,
         notes: [
           "The support dashboard defaults to the AI-enriched support context window.",
           "Company names are not exposed in v1 because the current support table does not populate them.",
@@ -418,13 +438,9 @@ Deno.serve(async (req: Request) => {
         activeFilters: filters,
         availableFilters: buildAvailableFilters(baseRows),
       },
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (_error) {
-    return new Response(JSON.stringify({ error: "Failed to load support tickets" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (error) {
+    console.error("Failed to load support tickets", error);
+    return jsonResponse({ error: "Failed to load support tickets" }, 500);
   }
 });

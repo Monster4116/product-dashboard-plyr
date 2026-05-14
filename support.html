@@ -113,13 +113,25 @@ const LoadingScreen = () => (
   </div>
 );
 
-const ErrorScreen = ({ message }) => (
+const ErrorScreen = ({ message, retry }) => (
   <div className="center-screen">
-    <div className="err-title">Failed to load support dashboard</div>
-    <div className="err-msg">{message}</div>
-    <div className="err-msg" style={{ marginTop: 8 }}>
-      This page reads support data through a server-side dashboard boundary and only receives sanitized aggregate context.
+    <div className="err-kicker">Tiny dashboard wobble</div>
+    <div className="err-title">Sorry, the support data did not load this time.</div>
+    <div className="err-msg">
+      The Supabase support endpoint occasionally returns a temporary 500 while the dashboard is fetching the latest ticket context.
     </div>
+    <div className="err-msg" style={{ marginTop: 8 }}>
+      Please reload the page, or try again from here. Your filters and dashboard data stay behind the same safe server-side boundary.
+    </div>
+    <div className="error-actions">
+      <button className="error-primary-action" type="button" onClick={() => window.location.reload()}>
+        Reload page
+      </button>
+      <button className="feed-item-toggle" type="button" onClick={retry}>
+        Try again
+      </button>
+    </div>
+    {message && <div className="err-detail">Technical detail: {message}</div>}
   </div>
 );
 
@@ -571,7 +583,7 @@ const App = () => {
           {loading ? (
             <LoadingScreen />
           ) : error ? (
-            <ErrorScreen message={error} />
+            <ErrorScreen message={error} retry={() => setRefreshKey(value => value + 1)} />
           ) : !dashboard || dashboard.summary.totalTickets === 0 ? (
             <EmptyScreen />
           ) : (

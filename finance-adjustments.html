@@ -199,6 +199,22 @@ function deriveCategoryCode(subCategoryCode) {
   return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : '';
 }
 
+const PRIORITY_CONF = {
+  Critical: { color:'#F44336', bg:'#F4433618' },
+  High: { color:'#FFA726', bg:'#FFA72618' },
+  Medium: { color:'#5110DD', bg:'#5110DD18' },
+  Low: { color:'#66BB6A', bg:'#66BB6A18' },
+};
+
+const getPriority = (abs, records) => {
+  if (abs >= 150000 || records >= 400) return 'Critical';
+  if (abs >= 50000 || records >= 150) return 'High';
+  if (abs >= 15000 || records >= 50) return 'Medium';
+  return 'Low';
+};
+
+const DRILL_PAGE_SIZE = 25;
+
 async function loadFinanceTaxonomy() {
   const response = await fetch(TAXONOMY_PATH, { cache: 'no-store' });
   if (!response.ok) {
@@ -219,10 +235,16 @@ async function loadFinanceTaxonomy() {
 const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
   const theme = useDashboardTheme();
   const chartPalette = useMemo(() => getChartPalette(), [theme]);
+  const [activeTab, setActiveTab] = useState('overview');
   const [territory, setTerritory] = useState('');
   const [aspect, setAspect] = useState('');
   const [parentCategory, setParentCategory] = useState('');
   const [subCategoryCode, setSubCategoryCode] = useState('');
+  const [company, setCompany] = useState('');
+  const [expandedGap, setExpandedGap] = useState('');
+  const [trendMetric, setTrendMetric] = useState('abs');
+  const [expandedMonth, setExpandedMonth] = useState('');
+  const [drillPage, setDrillPage] = useState(0);
 
   const taxonomyLookup = useMemo(() => (
     taxonomy.reduce((lookup, item) => {
@@ -238,6 +260,8 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
 
     return {
       ...row,
+      companyDisplay: row.companyName || row.companyId || 'Unknown',
+      employeeDisplay: row.employeeName || row.employeeId || 'Unknown',
       categoryCode: taxonomyMatch?.categoryCode || fallbackCategoryCode,
       subCategoryName: taxonomyMatch?.subCategoryName || fallbackCode || 'Unknown',
       standardisedLabel: taxonomyMatch?.standardisedLabel || fallbackCode || 'Unclassified',
@@ -250,20 +274,20 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
   const territories = useMemo(() => [...new Set(enrichedRows.map(r => r.territory).filter(Boolean))].sort(), [enrichedRows]);
   const aspects = useMemo(() => [...new Set(enrichedRows.map(r => r.primaryAspect).filter(Boolean))].sort(), [enrichedRows]);
   const parentCategories = useMemo(() => [...new Set(enrichedRows.map(r => r.parentCategory).filter(Boolean))].sort(), [enrichedRows]);
-  const subCategories = useMemo(() => (
-    [...new Set(enrichedRows.map(r => r.subCategoryCode).filter(Boolean))].sort()
-  ), [enrichedRows]);
+  const subCategories = useMemo(() => [...new Set(enrichedRows.map(r => r.subCategoryCode).filter(Boolean))].sort(), [enrichedRows]);
+  const companies = useMemo(() => [...new Set(enrichedRows.map(r => r.companyDisplay).filter(Boolean))].sort(), [enrichedRows]);
 
   const filtered = useMemo(() => enrichedRows.filter(r => {
     if (territory && r.territory !== territory) return false;
     if (aspect && r.primaryAspect !== aspect) return false;
     if (parentCategory && r.parentCategory !== parentCategory) return false;
     if (subCategoryCode && r.subCategoryCode !== subCategoryCode) return false;
+    if (company && r.companyDisplay !== company) return false;
     return true;
-  }), [enrichedRows, territory, aspect, parentCategory, subCategoryCode]);
+  }), [enrichedRows, territory, aspect, parentCategory, subCategoryCode, company]);
 
   const stats = useMemo(() => {
-    const companies = new Set();
+    const companiesSeen = new Set();
     const employees = new Set();
     const months = {};
     const aspectMap = {};
@@ -278,8 +302,8 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
       totalAbs += abs;
       net += adj;
       if (r.hasTaxonomy) mappedCount += 1;
-      if (r.companyId) companies.add(r.companyId);
-      if (r.employeeId) employees.add(r.employeeId);
+      if (r.companyDisplay) companiesSeen.add(r.companyDisplay);
+      if (r.employeeDisplay) employees.add(r.employeeDisplay);
 
       const mk = monthKey(r.month);
       if (!months[mk]) months[mk] = { key: mk, records: 0, abs: 0, net: 0 };
@@ -295,7 +319,7 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
 
       const parent = r.parentCategory || 'Unclassified';
       if (!parentCategoryMap[parent]) {
-        parentCategoryMap[parent] = { records: 0, abs: 0, net: 0, sampleCode: '', sampleLabel: '' };
+        parentCategoryMap[parent] = { records: 0, abs: 0, net: 0, sampleCode: '', sampleLabel: '', subs: {} };
       }
       parentCategoryMap[parent].records += 1;
       parentCategoryMap[parent].abs += abs;
@@ -304,19 +328,44 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
         parentCategoryMap[parent].sampleCode = r.subCategoryCode;
         parentCategoryMap[parent].sampleLabel = r.standardisedLabel || r.subCategoryName || r.subCategoryCode;
       }
+
+      const subKey = r.subCategoryCode || r.subCategoryName || 'Unclassified';
+      if (!parentCategoryMap[parent].subs[subKey]) {
+        parentCategoryMap[parent].subs[subKey] = { code: r.subCategoryCode, name: r.subCategoryName, records: 0, abs: 0, net: 0 };
+      }
+      parentCategoryMap[parent].subs[subKey].records += 1;
+      parentCategoryMap[parent].subs[subKey].abs += abs;
+      parentCategoryMap[parent].subs[subKey].net += adj;
     });
+
+    const monthsList = Object.values(months).filter(m => m.key !== 'Unknown').sort((a,b) => a.key.localeCompare(b.key));
+    const peakVolume = monthsList.reduce((best, item) => item.records > (best?.records || 0) ? item : best, null);
+    const peakExposure = monthsList.reduce((best, item) => item.abs > (best?.abs || 0) ? item : best, null);
+    const lastTwo = monthsList.slice(-2);
+    const momVolume = lastTwo.length === 2 ? ((lastTwo[1].records - lastTwo[0].records) / Math.max(lastTwo[0].records, 1)) * 100 : 0;
+    const momExposure = lastTwo.length === 2 ? ((lastTwo[1].abs - lastTwo[0].abs) / Math.max(lastTwo[0].abs, 1)) * 100 : 0;
 
     return {
       totalAbs,
       net,
-      companies: companies.size,
+      companies: companiesSeen.size,
       employees: employees.size,
       mappedCount,
       unmappedCount: Math.max(filtered.length - mappedCount, 0),
-      months: Object.values(months).sort((a,b) => a.key.localeCompare(b.key)),
+      peakVolume,
+      peakExposure,
+      latestMonth: monthsList[monthsList.length - 1] || null,
+      momVolume,
+      momExposure,
+      months: monthsList,
       aspects: Object.entries(aspectMap).map(([name, value]) => ({ name, ...value })).sort((a,b) => b.abs - a.abs),
       parentCategories: Object.entries(parentCategoryMap)
-        .map(([name, value]) => ({ name, ...value }))
+        .map(([name, value]) => ({
+          name,
+          ...value,
+          priority: getPriority(value.abs, value.records),
+          subs: Object.values(value.subs).sort((a,b) => b.abs - a.abs),
+        }))
         .sort((a,b) => b.abs - a.abs),
     };
   }, [filtered]);
@@ -342,11 +391,11 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
     }
   }), [stats, chartPalette]);
 
-  const parentCategoryChart = useMemo(() => ({
+  const aspectChart = useMemo(() => ({
     type: 'doughnut',
     data: {
-      labels: stats.parentCategories.slice(0, 8).map(a => a.name),
-      datasets: [{ data: stats.parentCategories.slice(0, 8).map(a => a.records), backgroundColor: CHART_COLORS, borderWidth: 0 }]
+      labels: stats.aspects.slice(0, 8).map(a => a.name),
+      datasets: [{ data: stats.aspects.slice(0, 8).map(a => a.records), backgroundColor: CHART_COLORS, borderWidth: 0 }]
     },
     options: {
       responsive: true,
@@ -355,6 +404,68 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
     }
   }), [stats, chartPalette]);
 
+  const trendChart = useMemo(() => {
+    const valueFor = item => trendMetric === 'records' ? item.records : trendMetric === 'net' ? item.net : item.abs;
+    return {
+      type: 'line',
+      data: {
+        labels: stats.months.map(m => monthLabel(m.key)),
+        datasets: [{
+          label: trendMetric === 'records' ? 'Volume' : trendMetric === 'net' ? 'Net exposure' : 'Absolute exposure',
+          data: stats.months.map(valueFor),
+          borderColor: chartPalette.chartBarBorder,
+          backgroundColor: chartPalette.chartFill,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          fill: true,
+          tension: 0.35,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: chartPalette.chartText, font:{ family:'Poppins', size:10 } }, grid: { color: chartPalette.chartGrid } },
+          y: { ticks: { color: chartPalette.chartText, callback: v => trendMetric === 'records' ? fmt.number(v) : fmt.currency(v) }, grid: { color: chartPalette.chartGrid } }
+        }
+      }
+    };
+  }, [stats, trendMetric, chartPalette]);
+
+  const trendRows = useMemo(() => {
+    const valueFor = item => trendMetric === 'records' ? item.records : trendMetric === 'net' ? item.net : item.abs;
+    return stats.months.map((item, index) => {
+      const previous = stats.months[index - 1];
+      const value = valueFor(item);
+      const previousValue = previous ? valueFor(previous) : null;
+      const change = previousValue === null ? null : value - previousValue;
+      const pct = previousValue ? (change / Math.abs(previousValue)) * 100 : null;
+      return { ...item, value, change, pct };
+    }).reverse();
+  }, [stats, trendMetric]);
+
+  const drillRows = useMemo(() => {
+    if (!expandedMonth) return [];
+    return filtered
+      .filter(row => monthKey(row.month) === expandedMonth)
+      .sort((a,b) => (Number(b.absoluteAdjustmentUsd) || Math.abs(Number(b.adjustmentUsd) || 0)) - (Number(a.absoluteAdjustmentUsd) || Math.abs(Number(a.adjustmentUsd) || 0)));
+  }, [filtered, expandedMonth]);
+  const totalDrillPages = Math.max(1, Math.ceil(drillRows.length / DRILL_PAGE_SIZE));
+  const drillPageRows = drillRows.slice(drillPage * DRILL_PAGE_SIZE, (drillPage + 1) * DRILL_PAGE_SIZE);
+  const activeFilterCount = [territory, aspect, parentCategory, subCategoryCode, company].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setTerritory('');
+    setAspect('');
+    setParentCategory('');
+    setSubCategoryCode('');
+    setCompany('');
+    setExpandedGap('');
+    setExpandedMonth('');
+    setDrillPage(0);
+  };
+
   return (
     <div className="tab-content">
       <section className="page-hero compact">
@@ -362,7 +473,7 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
           <div className="eyebrow">Live dashboard</div>
           <h1 className="page-hero-title">Finance adjustments</h1>
           <p className="page-hero-copy">
-            Review adjustment volume, exposure and operational concentration across territories, primary aspects, and taxonomy-backed sub-categories.
+            Review adjustment volume, exposure, product gaps and month-level drilldowns across the live Supabase-backed dataset.
           </p>
         </div>
         <div className="hero-stat-block">
@@ -373,30 +484,47 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
         </div>
       </section>
 
+      <div className="product-news-tabs">
+        <div>
+          <h2 className="section-title">Finance views</h2>
+          <p className="product-news-tabs-copy">Move from portfolio exposure to product gap concentration and record-level monthly drilldowns.</p>
+        </div>
+        <div className="tab-nav" role="tablist" aria-label="Finance adjustment views">
+          {[
+            ['overview', 'Overview'],
+            ['gaps', 'Product gaps'],
+            ['trend', 'Trend analysis'],
+          ].map(([id, label]) => (
+            <button key={id} className={`tab-btn ${activeTab === id ? 'active' : ''}`} type="button" onClick={() => setActiveTab(id)}>{label}</button>
+          ))}
+        </div>
+      </div>
+
       <div className="section-header">
         <div>
           <h2 className="section-title">Filters</h2>
-          <p className="section-sub">Narrow the live dataset by top-level aspect, taxonomy parent category, and specific sub-category codes.</p>
+          <p className="section-sub">{fmt.number(filtered.length)} records match {activeFilterCount || 'no'} active filter{activeFilterCount === 1 ? '' : 's'}.</p>
         </div>
-        <div style={{ display:'flex', gap: 10, flexWrap:'wrap' }}>
-          <select className="f-select" value={territory} onChange={e => setTerritory(e.target.value)}>
-            <option value="">All territories</option>
-            {territories.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select className="f-select" value={aspect} onChange={e => setAspect(e.target.value)}>
-            <option value="">All aspects</option>
-            {aspects.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select className="f-select" value={parentCategory} onChange={e => setParentCategory(e.target.value)}>
-            <option value="">All parent categories</option>
-            {parentCategories.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select className="f-select" value={subCategoryCode} onChange={e => setSubCategoryCode(e.target.value)}>
-            <option value="">All taxonomy codes</option>
-            {subCategories.map(code => <option key={code} value={code}>{code}</option>)}
-          </select>
-        </div>
+        <button className="feed-item-toggle" type="button" onClick={clearFilters}>Clear filters</button>
       </div>
+
+      <section className="filter-panel">
+        {[
+          ['territory', 'Territory', territory, setTerritory, territories, 'All territories'],
+          ['aspect', 'Primary aspect', aspect, setAspect, aspects, 'All aspects'],
+          ['parent', 'Parent category', parentCategory, setParentCategory, parentCategories, 'All parent categories'],
+          ['subcategory', 'Taxonomy code', subCategoryCode, setSubCategoryCode, subCategories, 'All taxonomy codes'],
+          ['company', 'Company', company, setCompany, companies, 'All companies'],
+        ].map(([id, label, value, setter, options, placeholder]) => (
+          <div className="filter-group" key={id}>
+            <label htmlFor={`finance-${id}`}>{label}</label>
+            <select id={`finance-${id}`} className="f-select" value={value} onChange={event => { setter(event.target.value); setExpandedMonth(''); setDrillPage(0); }}>
+              <option value="">{placeholder}</option>
+              {options.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </div>
+        ))}
+      </section>
 
       {(taxonomyError || stats.unmappedCount > 0) && (
         <div className="chart-card" style={{ paddingBottom: 16 }}>
@@ -413,72 +541,221 @@ const FinanceView = ({ rows, taxonomy, taxonomyError }) => {
         </div>
       )}
 
-      <div className="kpi-grid">
-        <KPICard label="Records" value={fmt.number(filtered.length)} sub="Filtered adjustments" />
-        <KPICard label="Absolute exposure" value={fmt.currency(stats.totalAbs)} sub="Total magnitude" />
-        <KPICard label="Net exposure" value={fmt.currency(stats.net)} sign={stats.net >= 0 ? 'pos' : 'neg'} />
-        <KPICard label="Avg adjustment" value={fmt.currency(filtered.length ? stats.totalAbs / filtered.length : 0)} />
-        <KPICard label="Parent categories" value={fmt.number(stats.parentCategories.length)} />
-        <KPICard label="Mapped rows" value={fmt.number(stats.mappedCount)} sub={`${fmt.number(stats.unmappedCount)} unmapped`} />
-      </div>
+      {activeTab === 'overview' && (
+        <>
+          <div className="kpi-grid">
+            <KPICard label="Records" value={fmt.number(filtered.length)} sub="Filtered adjustments" />
+            <KPICard label="Absolute exposure" value={fmt.currency(stats.totalAbs)} sub="Total magnitude" />
+            <KPICard label="Net exposure" value={fmt.currency(stats.net)} sign={stats.net >= 0 ? 'pos' : 'neg'} />
+            <KPICard label="Avg adjustment" value={fmt.currency(filtered.length ? stats.totalAbs / filtered.length : 0)} />
+            <KPICard label="Unique companies" value={fmt.number(stats.companies)} />
+            <KPICard label="Unique employees" value={fmt.number(stats.employees)} />
+          </div>
 
-      <div className="charts-row">
-        <div className="chart-card" style={{ flex: 2 }}>
-          <div className="chart-title">Monthly records and exposure</div>
-          <ChartCanvas config={monthlyChart} />
-        </div>
-        <div className="chart-card" style={{ flex: 1 }}>
-          <div className="chart-title">Records by parent category</div>
-          <ChartCanvas config={parentCategoryChart} />
-        </div>
-      </div>
+          <div className="peak-strip">
+            {stats.peakVolume && <div className="peak-item"><span className="peak-label">Peak month volume</span><span className="peak-val">{monthLabel(stats.peakVolume.key)} - {fmt.number(stats.peakVolume.records)} records</span></div>}
+            {stats.peakExposure && <div className="peak-item"><span className="peak-label">Peak month exposure</span><span className="peak-val">{monthLabel(stats.peakExposure.key)} - {fmt.currency(stats.peakExposure.abs)}</span></div>}
+            {stats.latestMonth && <div className="peak-item"><span className="peak-label">Latest month records</span><span className="peak-val">{fmt.number(stats.latestMonth.records)}</span></div>}
+            <div className="peak-item"><span className="peak-label">MoM volume</span><span className={`peak-val ${stats.momVolume > 0 ? 'neg' : stats.momVolume < 0 ? 'pos' : ''}`}>{stats.momVolume > 0 ? '+' : ''}{stats.momVolume.toFixed(1)}%</span></div>
+            <div className="peak-item"><span className="peak-label">MoM exposure</span><span className={`peak-val ${stats.momExposure > 0 ? 'neg' : stats.momExposure < 0 ? 'pos' : ''}`}>{stats.momExposure > 0 ? '+' : ''}{stats.momExposure.toFixed(1)}%</span></div>
+          </div>
 
-      <div className="chart-card">
-        <div className="chart-title">Exposure by taxonomy parent category</div>
-        <div className="table-wrap" style={{ marginBottom: 0 }}>
-          <table className="data-table">
-            <thead><tr><th>Parent category</th><th>Example taxonomy</th><th className="r">Records</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th></tr></thead>
-            <tbody>
-              {stats.parentCategories.map(item => (
-                <tr key={item.name}>
-                  <td>{item.name}</td>
-                  <td title={item.sampleLabel || ''}>{item.sampleCode || '---'}</td>
-                  <td className="r">{fmt.number(item.records)}</td>
-                  <td className="r">{fmt.currency(item.abs)}</td>
-                  <td className={`r ${item.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(item.net)}</td>
-                  <td className="r">{fmt.currency(item.records ? item.abs / item.records : 0)}</td>
-                </tr>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 2 }}>
+              <div className="chart-title">Monthly records and exposure</div>
+              <ChartCanvas config={monthlyChart} />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Records by primary aspect</div>
+              <ChartCanvas config={aspectChart} />
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-title">Exposure by primary aspect</div>
+            <div className="table-wrap" style={{ marginBottom: 0 }}>
+              <table className="data-table">
+                <thead><tr><th>Primary aspect</th><th className="r">Records</th><th className="r">% total</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th></tr></thead>
+                <tbody>
+                  {stats.aspects.map(item => (
+                    <tr key={item.name}>
+                      <td>{item.name}</td>
+                      <td className="r">{fmt.number(item.records)}</td>
+                      <td className="r">{fmt.pct(filtered.length ? item.records / filtered.length * 100 : 0)}</td>
+                      <td className="r">{fmt.currency(item.abs)}</td>
+                      <td className={`r ${item.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(item.net)}</td>
+                      <td className="r">{fmt.currency(item.records ? item.abs / item.records : 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'gaps' && (
+        <>
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Product gap analysis</h2>
+              <p className="section-sub">Click a parent category to inspect the sub-category concentration underneath it.</p>
+            </div>
+          </div>
+          <div className="chart-card">
+            <div className="chart-title">Exposure by taxonomy parent category</div>
+            <div className="table-wrap" style={{ marginBottom: 0 }}>
+              <table className="data-table">
+                <thead><tr><th style={{ width: 28 }}></th><th>Parent category</th><th className="r">Records</th><th className="r">% records</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th><th>Priority</th></tr></thead>
+                <tbody>
+                  {stats.parentCategories.map(item => {
+                    const isOpen = expandedGap === item.name;
+                    const priority = PRIORITY_CONF[item.priority] || PRIORITY_CONF.Low;
+                    return (
+                      <React.Fragment key={item.name}>
+                        <tr className={`gap-row${isOpen ? ' open' : ''}`} onClick={() => setExpandedGap(isOpen ? '' : item.name)}>
+                          <td className="expand-cell">{isOpen ? 'v' : '>'}</td>
+                          <td className="gap-name">{item.name}</td>
+                          <td className="r">{fmt.number(item.records)}</td>
+                          <td className="r">{fmt.pct(filtered.length ? item.records / filtered.length * 100 : 0)}</td>
+                          <td className="r">{fmt.currency(item.abs)}</td>
+                          <td className={`r ${item.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(item.net)}</td>
+                          <td className="r">{fmt.currency(item.records ? item.abs / item.records : 0)}</td>
+                          <td><span className="priority-badge" style={{ background: priority.bg, color: priority.color }}>{item.priority}</span></td>
+                        </tr>
+                        {isOpen && (
+                          <tr>
+                            <td className="detail-td" colSpan="8">
+                              <div className="detail-panel">
+                                <div className="detail-sub-hdr">Sub-category breakdown</div>
+                                <table className="sub-table">
+                                  <thead><tr><th>Sub-category name</th><th>Code</th><th className="r">Records</th><th className="r">% parent</th><th className="r">Abs exposure</th><th className="r">Net exposure</th><th className="r">Avg / record</th></tr></thead>
+                                  <tbody>
+                                    {item.subs.map(sub => (
+                                      <tr key={`${item.name}-${sub.code || sub.name}`}>
+                                        <td>{sub.name || 'Unknown'}</td>
+                                        <td><span className="code-pill">{sub.code || '---'}</span></td>
+                                        <td className="r">{fmt.number(sub.records)}</td>
+                                        <td className="r">{fmt.pct(item.records ? sub.records / item.records * 100 : 0)}</td>
+                                        <td className="r">{fmt.currency(sub.abs)}</td>
+                                        <td className={`r ${sub.net >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(sub.net)}</td>
+                                        <td className="r">{fmt.currency(sub.records ? sub.abs / sub.records : 0)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'trend' && (
+        <>
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Trend analysis</h2>
+              <p className="section-sub">Switch metric, then expand a month to inspect the underlying records.</p>
+            </div>
+            <div className="metric-toggle">
+              {[
+                ['abs', 'Abs exposure'],
+                ['net', 'Net exposure'],
+                ['records', 'Volume'],
+              ].map(([id, label]) => (
+                <button key={id} className={`metric-btn ${trendMetric === id ? 'active' : ''}`} type="button" onClick={() => setTrendMetric(id)}>{label}</button>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
+          </div>
 
-      <div className="chart-card">
-        <div className="chart-title">Latest adjustment records with taxonomy detail</div>
-        <div className="table-wrap" style={{ marginBottom: 0 }}>
-          <table className="data-table">
-            <thead><tr><th>Month</th><th>Territory</th><th>Aspect</th><th>Taxonomy code</th><th>Standardised label</th><th>Description</th><th className="r">Adjustment USD</th><th className="r">Confidence</th></tr></thead>
-            <tbody>
-              {filtered.slice(0, 75).map(r => (
-                <tr key={`${r.month}-${r.companyId}-${r.employeeId}-${r.primaryAspect}-${r.subCategoryCode || 'na'}`}>
-                  <td>{r.month}</td>
-                  <td>{r.territory}</td>
-                  <td>{r.primaryAspect || 'Unknown'}</td>
-                  <td>{r.subCategoryCode || '---'}</td>
-                  <td title={r.parentCategory || ''}>{r.standardisedLabel || 'Unclassified'}</td>
-                  <td title={r.definition || r.detailedDescription || ''}>
-                    {(r.definition || r.detailedDescription || '---').slice(0, 120)}
-                    {(r.definition || r.detailedDescription || '').length > 120 ? '…' : ''}
-                  </td>
-                  <td className={`r ${(Number(r.adjustmentUsd) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(r.adjustmentUsd)}</td>
-                  <td className="r">{r.confidence == null ? '---' : fmt.pct(Number(r.confidence) * 100)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          <div className="chart-card">
+            <div className="chart-title">
+              Month-over-month trend
+              {activeFilterCount > 0 && (
+                <span style={{ display:'flex', gap: 6, flexWrap:'wrap' }}>
+                  {[territory, aspect, parentCategory, subCategoryCode, company].filter(Boolean).map(item => <span key={item} className="filter-tag">{item}</span>)}
+                </span>
+              )}
+            </div>
+            {stats.months.length ? <ChartCanvas config={trendChart} /> : <div className="no-data">No monthly data matches the selected filters.</div>}
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-title">Month-over-month change</div>
+            <div className="table-wrap" style={{ marginBottom: 0 }}>
+              <table className="data-table">
+                <thead><tr><th style={{ width: 28 }}></th><th>Month</th><th className="r">{trendMetric === 'records' ? 'Volume' : trendMetric === 'net' ? 'Net exposure' : 'Abs exposure'}</th><th className="r">MoM change</th><th className="r">MoM %</th></tr></thead>
+                <tbody>
+                  {trendRows.map(item => {
+                    const isOpen = expandedMonth === item.key;
+                    return (
+                      <React.Fragment key={item.key}>
+                        <tr className={`gap-row${isOpen ? ' open' : ''}`} onClick={() => { setExpandedMonth(isOpen ? '' : item.key); setDrillPage(0); }}>
+                          <td className="expand-cell">{isOpen ? 'v' : '>'}</td>
+                          <td>{monthLabel(item.key)}</td>
+                          <td className="r">{trendMetric === 'records' ? fmt.number(item.value) : fmt.currency(item.value)}</td>
+                          <td className={`r ${item.change == null ? '' : item.change >= 0 ? 'neg' : 'pos'}`}>{item.change == null ? '---' : `${item.change > 0 ? '+' : ''}${trendMetric === 'records' ? fmt.number(item.change) : fmt.currency(item.change)}`}</td>
+                          <td className={`r ${item.pct == null ? '' : item.pct >= 0 ? 'neg' : 'pos'}`}>{item.pct == null ? '---' : `${item.pct > 0 ? '+' : ''}${item.pct.toFixed(1)}%`}</td>
+                        </tr>
+                        {isOpen && (
+                          <tr>
+                            <td className="detail-td" colSpan="5">
+                              <div className="detail-panel">
+                                <div className="section-header" style={{ marginBottom: 12 }}>
+                                  <div>
+                                    <div className="detail-sub-hdr">{monthLabel(item.key)} records</div>
+                                    <p className="section-sub">{fmt.number(drillRows.length)} adjustment records sorted by absolute exposure.</p>
+                                  </div>
+                                  {totalDrillPages > 1 && <span className="filter-tag">Page {drillPage + 1} of {totalDrillPages}</span>}
+                                </div>
+                                <div className="table-wrap" style={{ marginBottom: 0 }}>
+                                  <table className="sub-table" style={{ minWidth: 980 }}>
+                                    <thead><tr><th>Employee</th><th>Company</th><th>Territory</th><th>Currency</th><th className="r">Billing adj</th><th className="r">Adj USD</th><th>Primary aspect</th><th>Sub-category</th><th className="r">Confidence</th><th>Tags</th></tr></thead>
+                                    <tbody>
+                                      {drillPageRows.map((row, index) => (
+                                        <tr key={`${row.month}-${row.companyId}-${row.employeeId}-${row.subCategoryCode}-${index}`}>
+                                          <td>{row.employeeDisplay}</td>
+                                          <td>{row.companyDisplay}</td>
+                                          <td>{row.territory || row.countryCode || '---'}</td>
+                                          <td>{row.billingCurrency || '---'}</td>
+                                          <td className="r">{row.adjustmentBilling == null ? '---' : fmt.currency(row.adjustmentBilling)}</td>
+                                          <td className={`r ${(Number(row.adjustmentUsd) || 0) >= 0 ? 'pos' : 'neg'}`}>{fmt.currency(row.adjustmentUsd)}</td>
+                                          <td>{row.primaryAspect || 'Unknown'}</td>
+                                          <td><span className="code-pill">{row.subCategoryCode || '---'}</span> {row.subCategoryName && <span style={{ color:'var(--text-secondary)' }}>{row.subCategoryName}</span>}</td>
+                                          <td className="r">{row.confidence == null ? '---' : fmt.pct(Number(row.confidence) * 100)}</td>
+                                          <td>{(row.tags || []).slice(0, 2).join(', ') || '---'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                                {totalDrillPages > 1 && (
+                                  <div style={{ display:'flex', justifyContent:'center', gap: 8, marginTop: 12 }}>
+                                    <button className="feed-item-toggle" type="button" disabled={drillPage === 0} onClick={() => setDrillPage(page => Math.max(0, page - 1))}>Previous</button>
+                                    <button className="feed-item-toggle" type="button" disabled={drillPage >= totalDrillPages - 1} onClick={() => setDrillPage(page => Math.min(totalDrillPages - 1, page + 1))}>Next</button>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
