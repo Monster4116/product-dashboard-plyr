@@ -139,12 +139,18 @@ export const mapSupportDashboard = (rawItem = {}) => ({
 export const mapFinanceAdjustment = (rawItem = {}) => ({
   month: toStringValue(rawItem.month, ''),
   companyId: toStringValue(rawItem.companyId, ''),
+  companyName: toStringValue(rawItem.companyName, ''),
   employeeId: toStringValue(rawItem.employeeId, ''),
+  employeeName: toStringValue(rawItem.employeeName, ''),
   territory: toStringValue(rawItem.territory, 'Unknown'),
+  countryCode: toStringValue(rawItem.countryCode, ''),
+  billingCurrency: toStringValue(rawItem.billingCurrency, ''),
   primaryAspect: toStringValue(rawItem.primaryAspect, 'Unknown'),
   subCategoryCode: toStringValue(rawItem.subCategoryCode, ''),
   detailedDescription: toStringValue(rawItem.detailedDescription, ''),
   tags: toStringList(rawItem.tags),
+  adjustmentBilling:
+    rawItem.adjustmentBilling == null ? null : toNumber(rawItem.adjustmentBilling, 0),
   adjustmentUsd: toNumber(rawItem.adjustmentUsd, 0),
   absoluteAdjustmentUsd: toNumber(
     rawItem.absoluteAdjustmentUsd,
