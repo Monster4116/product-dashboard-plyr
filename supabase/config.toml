@@ -1,0 +1,4 @@
+project_id = "toajcgsenjhtkmhisqkz"
+
+[functions.support-tickets]
+verify_jwt = false
