@@ -3,6 +3,9 @@
 .env.*.local
 *.pem
 *.key
+.DS_Store
 node_modules
 dist
 build
+supabase/.branches/
+supabase/.temp/

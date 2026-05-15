@@ -55,6 +55,26 @@ const mapSupportDistributionItem = (item = {}) => ({
   pct: item.pct == null ? null : toNumber(item.pct, 0),
 });
 
+const mapSupportMetricRow = (item = {}) => {
+  const value = toStringValue(
+    item.value || item.department || item.tag || item.bucket || item.category || item.country,
+    'Unknown'
+  );
+
+  return {
+    label: toStringValue(item.label, value),
+    value,
+    count: toNumber(item.count || item.ticketCount, 0),
+    pct: item.pct == null ? null : toNumber(item.pct, 0),
+    ticketCount: toNumber(item.ticketCount || item.count, 0),
+    openOrPendingTickets: toNumber(item.openOrPendingTickets, 0),
+    l4Tickets: toNumber(item.l4Tickets, 0),
+    requiresInternalHandoff: toNumber(item.requiresInternalHandoff, 0),
+    requiresClientInstruction: toNumber(item.requiresClientInstruction, 0),
+    badSatisfactionTickets: toNumber(item.badSatisfactionTickets, 0),
+  };
+};
+
 export const mapSupportDashboard = (rawItem = {}) => ({
   summary: {
     windowStart: toStringValue(rawItem.summary?.windowStart, ''),
@@ -90,6 +110,68 @@ export const mapSupportDashboard = (rawItem = {}) => ({
       pct: item.pct == null ? null : toNumber(item.pct, 0),
     })),
   },
+  queues: {
+    totalOpenOrPending: toNumber(rawItem.queues?.totalOpenOrPending, 0),
+    byBucket: mapList(rawItem.queues?.byBucket, mapSupportMetricRow),
+    byCategory: mapList(rawItem.queues?.byCategory, mapSupportMetricRow),
+    byDepartment: mapList(rawItem.queues?.byDepartment, mapSupportMetricRow),
+    bySeverity: mapList(rawItem.queues?.bySeverity, mapSupportMetricRow),
+  },
+  heatmaps: {
+    categorySeverity: mapList(rawItem.heatmaps?.categorySeverity, (item) => ({
+      category: toStringValue(item.category, 'Unknown'),
+      categoryLabel: toStringValue(item.categoryLabel, 'Unknown'),
+      severity: toStringValue(item.severity, 'Unknown'),
+      ticketCount: toNumber(item.ticketCount, 0),
+      openOrPendingTickets: toNumber(item.openOrPendingTickets, 0),
+      requiresInternalHandoff: toNumber(item.requiresInternalHandoff, 0),
+      pct: item.pct == null ? null : toNumber(item.pct, 0),
+    })),
+    countryCategory: mapList(rawItem.heatmaps?.countryCategory, (item) => ({
+      country: toStringValue(item.country, 'Unknown'),
+      category: toStringValue(item.category, 'Unknown'),
+      categoryLabel: toStringValue(item.categoryLabel, 'Unknown'),
+      ticketCount: toNumber(item.ticketCount, 0),
+      l4Tickets: toNumber(item.l4Tickets, 0),
+      openOrPendingTickets: toNumber(item.openOrPendingTickets, 0),
+      badSatisfactionTickets: toNumber(item.badSatisfactionTickets, 0),
+      requiresInternalHandoff: toNumber(item.requiresInternalHandoff, 0),
+    })),
+    monthCategory: mapList(rawItem.heatmaps?.monthCategory, (item) => ({
+      category: toStringValue(item.category, 'Unknown'),
+      categoryLabel: toStringValue(item.categoryLabel, 'Unknown'),
+      months: mapList(item.months, (month) => ({
+        month: toStringValue(month.month, ''),
+        ticketCount: toNumber(month.ticketCount, 0),
+        l4Tickets: toNumber(month.l4Tickets, 0),
+        openOrPendingTickets: toNumber(month.openOrPendingTickets, 0),
+      })),
+    })),
+  },
+  departments: mapList(rawItem.departments, (item) => ({
+    department: toStringValue(item.department, 'Unknown'),
+    label: toStringValue(item.label, 'Unknown'),
+    ticketCount: toNumber(item.ticketCount, 0),
+    openOrPendingTickets: toNumber(item.openOrPendingTickets, 0),
+    l4Tickets: toNumber(item.l4Tickets, 0),
+    requiresInternalHandoff: toNumber(item.requiresInternalHandoff, 0),
+    requiresClientInstruction: toNumber(item.requiresClientInstruction, 0),
+    platformBugTickets: toNumber(item.platformBugTickets, 0),
+    payrollTickets: toNumber(item.payrollTickets, 0),
+  })),
+  segments: {
+    bySegment: mapList(rawItem.segments?.bySegment, mapSupportMetricRow),
+    byChurnRisk: mapList(rawItem.segments?.byChurnRisk, mapSupportMetricRow),
+  },
+  tags: mapList(rawItem.tags, (item) => ({
+    tag: toStringValue(item.tag, 'Unknown'),
+    label: toStringValue(item.label, 'Unknown'),
+    ticketCount: toNumber(item.ticketCount, 0),
+    openOrPendingTickets: toNumber(item.openOrPendingTickets, 0),
+    l4Tickets: toNumber(item.l4Tickets, 0),
+    requiresInternalHandoff: toNumber(item.requiresInternalHandoff, 0),
+    pct: item.pct == null ? null : toNumber(item.pct, 0),
+  })),
   hotspots: {
     companies: mapList(rawItem.hotspots?.companies, (item) => ({
       companyId: toStringValue(item.companyId, 'Unknown'),
@@ -118,6 +200,22 @@ export const mapSupportDashboard = (rawItem = {}) => ({
     aiContextRows: toNumber(rawItem.dataQuality?.aiContextRows, 0),
     filteredAiContextRows: toNumber(rawItem.dataQuality?.filteredAiContextRows, 0),
     aiCoveragePct: rawItem.dataQuality?.aiCoveragePct == null ? null : toNumber(rawItem.dataQuality?.aiCoveragePct, 0),
+    missingAiContext: toNumber(rawItem.dataQuality?.missingAiContext, 0),
+    missingCountry: toNumber(rawItem.dataQuality?.missingCountry, 0),
+    missingCategory: toNumber(rawItem.dataQuality?.missingCategory, 0),
+    missingRequesterType: toNumber(rawItem.dataQuality?.missingRequesterType, 0),
+    missingSeverity: toNumber(rawItem.dataQuality?.missingSeverity, 0),
+    missingCustomerSegment: toNumber(rawItem.dataQuality?.missingCustomerSegment, 0),
+    missingChurnRisk: toNumber(rawItem.dataQuality?.missingChurnRisk, 0),
+    completeness: mapList(rawItem.dataQuality?.completeness, mapSupportDistributionItem),
+    byMonth: mapList(rawItem.dataQuality?.byMonth, (item) => ({
+      month: toStringValue(item.month, ''),
+      rawTicketRows: toNumber(item.rawTicketRows, 0),
+      aiContextRows: toNumber(item.aiContextRows, 0),
+      missingCountry: toNumber(item.missingCountry, 0),
+      missingCategory: toNumber(item.missingCategory, 0),
+      missingSeverity: toNumber(item.missingSeverity, 0),
+    })),
     notes: mapList(rawItem.dataQuality?.notes, (item) => toStringValue(item, '')),
   },
   metadata: {
@@ -130,6 +228,7 @@ export const mapSupportDashboard = (rawItem = {}) => ({
     availableFilters: {
       severities: mapList(rawItem.metadata?.availableFilters?.severities, mapSupportDistributionItem),
       categories: mapList(rawItem.metadata?.availableFilters?.categories, mapSupportDistributionItem),
+      departments: mapList(rawItem.metadata?.availableFilters?.departments, mapSupportDistributionItem),
       requesterTypes: mapList(rawItem.metadata?.availableFilters?.requesterTypes, mapSupportDistributionItem),
       countries: mapList(rawItem.metadata?.availableFilters?.countries, mapSupportDistributionItem),
     },

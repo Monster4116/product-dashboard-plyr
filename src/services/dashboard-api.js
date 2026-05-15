@@ -73,12 +73,12 @@ export const getDashboardSummary = async () => {
 export const getSupportTickets = async () =>
   requestList('/dashboard/support-tickets', mapSupportTicket);
 
-export const getSupportDashboard = async (query = {}) => {
+export const getSupportDashboard = async (query = {}, options = {}) => {
   if (isLocalMockMode) {
     return mapSupportDashboard(supportDashboardMockResponse);
   }
 
-  const payload = await getJson(buildQueryPath('/support-tickets', query));
+  const payload = await getJson(buildQueryPath('/support-tickets', query), options);
 
   if (!payload || typeof payload !== 'object') {
     throw new Error('Unexpected response shape from /support-tickets.');

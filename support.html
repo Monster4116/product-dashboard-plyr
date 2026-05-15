@@ -27,7 +27,8 @@
 const { useEffect, useMemo, useRef, useState } = React;
 
 const SUPPORT_ENV = window.__PUBLIC_CONFIG__?.appEnv ?? 'local';
-const SUPPORT_CACHE_PREFIX = `dashboard.support.v1.${SUPPORT_ENV}`;
+const SUPPORT_CACHE_PREFIX = `dashboard.support.v2.${SUPPORT_ENV}`;
+const SUPPORT_LAST_GOOD_KEY = `${SUPPORT_CACHE_PREFIX}.last-good`;
 const CHART_COLORS = ['#5110DD', '#36B1FF', '#66BB6A', '#FFA726', '#AF91EF', '#F44336', '#29B6F6', '#7E57C2'];
 
 const fmt = {
@@ -66,6 +67,34 @@ const writeCache = (filters, payload) => {
   } catch (_) {
     // Ignore storage failures and rely on fresh API results.
   }
+};
+
+const readLastGood = () => {
+  try {
+    const raw = localStorage.getItem(SUPPORT_LAST_GOOD_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const writeLastGood = payload => {
+  try {
+    localStorage.setItem(SUPPORT_LAST_GOOD_KEY, JSON.stringify(payload));
+  } catch (_) {
+    // Ignore persistent storage failures; session cache still handles the current tab.
+  }
+};
+
+const defaultFilters = { severity: '', category: '', requesterType: '', country: '', department: '', datePreset: 'all', startDate: '', endDate: '' };
+const toApiFilters = filters => {
+  const apiFilters = { ...filters };
+  delete apiFilters.datePreset;
+  if (filters.datePreset !== 'custom' && filters.datePreset !== 'current_month' && filters.datePreset !== 'last_30' && filters.datePreset !== 'last_90') {
+    delete apiFilters.startDate;
+    delete apiFilters.endDate;
+  }
+  return apiFilters;
 };
 
 const useDashboardTheme = () => {
@@ -179,6 +208,131 @@ const DistributionTable = ({ rows, label = 'Label' }) => (
   </div>
 );
 
+const MetricTable = ({ rows, label = 'Label', extraColumns = [] }) => (
+  <div className="table-wrap">
+    <table className="data-table">
+      <thead>
+        <tr>
+          <th>{label}</th>
+          <th className="r">Tickets</th>
+          {extraColumns.map(column => <th key={column.key} className="r">{column.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(row => (
+          <tr key={`${label}-${row.value || row.label || row.tag || row.department || row.bucket}`}>
+            <td>{row.label || row.value || row.tag || row.department || row.bucket}</td>
+            <td className="r">{fmt.number(row.ticketCount || row.count)}</td>
+            {extraColumns.map(column => <td key={column.key} className="r">{fmt.number(row[column.key])}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const HeatCell = ({ value, max, tone = 'blue' }) => {
+  const intensity = max ? Math.max(0.08, Math.min(0.9, Number(value || 0) / max)) : 0;
+  const color = tone === 'red'
+    ? `rgba(244, 67, 54, ${intensity})`
+    : `rgba(81, 16, 221, ${intensity})`;
+
+  return (
+    <td className="r" style={{ background: value ? color : 'transparent', color: intensity > 0.55 ? '#fff' : 'var(--text-primary)' }}>
+      {value ? fmt.number(value) : '---'}
+    </td>
+  );
+};
+
+const CategorySeverityHeatmap = ({ rows }) => {
+  const severities = ['L1', 'L2', 'L3', 'L4', 'Unknown'];
+  const categories = [...new Set(rows.map(row => row.categoryLabel))].slice(0, 12);
+  const max = Math.max(1, ...rows.map(row => row.ticketCount || 0));
+
+  return (
+    <div className="table-wrap">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            {severities.map(severity => <th key={severity} className="r">{severity}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {categories.map(category => (
+            <tr key={category}>
+              <td>{category}</td>
+              {severities.map(severity => {
+                const cell = rows.find(row => row.categoryLabel === category && row.severity === severity);
+                return <HeatCell key={`${category}-${severity}`} value={cell?.ticketCount || 0} max={max} tone={severity === 'L4' ? 'red' : 'blue'} />;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const MonthCategoryMatrix = ({ rows }) => {
+  const months = [...new Set(rows.flatMap(row => row.months.map(month => month.month)))].sort();
+  const max = Math.max(1, ...rows.flatMap(row => row.months.map(month => month.ticketCount || 0)));
+
+  return (
+    <div className="table-wrap">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            {months.map(month => <th key={month} className="r">{fmt.month(month)}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => (
+            <tr key={row.category}>
+              <td>{row.categoryLabel}</td>
+              {months.map(month => {
+                const cell = row.months.find(item => item.month === month);
+                return <HeatCell key={`${row.category}-${month}`} value={cell?.ticketCount || 0} max={max} />;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const CountryCategoryHeatmap = ({ rows }) => {
+  const countries = [...new Set(rows.map(row => row.country))].slice(0, 12);
+  const categories = [...new Set(rows.map(row => row.categoryLabel))].slice(0, 8);
+  const max = Math.max(1, ...rows.map(row => row.ticketCount || 0));
+
+  return (
+    <div className="table-wrap">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Country</th>
+            {categories.map(category => <th key={category} className="r">{category}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {countries.map(country => (
+            <tr key={country}>
+              <td>{country}</td>
+              {categories.map(category => {
+                const cell = rows.find(row => row.country === country && row.categoryLabel === category);
+                return <HeatCell key={`${country}-${category}`} value={cell?.ticketCount || 0} max={max} />;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const InsightCard = ({ item }) => (
   <article className="support-insight-card">
     <div className="support-insight-head">
@@ -207,12 +361,19 @@ const InsightCard = ({ item }) => (
   </article>
 );
 
-const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
+const SupportDashboardView = ({ dashboard, filters, setFilters, refresh, staleNotice }) => {
   const theme = useDashboardTheme();
   const chartPalette = useMemo(() => getChartPalette(), [theme]);
   const [activeTab, setActiveTab] = useState('overview');
 
   const filterOptions = dashboard.metadata.availableFilters || {};
+  const datePresets = [
+    { value: 'all', label: 'All history' },
+    { value: 'current_month', label: 'Current month' },
+    { value: 'last_30', label: 'Last 30 days' },
+    { value: 'last_90', label: 'Last 90 days' },
+    { value: 'custom', label: 'Custom' },
+  ];
 
   const trendChart = useMemo(() => ({
     type: 'bar',
@@ -301,8 +462,35 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
     setFilters(current => ({ ...current, [key]: value }));
   };
 
+  const setDatePreset = value => {
+    const today = new Date();
+    const iso = date => date.toISOString().slice(0, 10);
+    const next = { datePreset: value, startDate: '', endDate: '' };
+
+    if (value === 'current_month') {
+      next.startDate = iso(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)));
+      next.endDate = iso(today);
+    }
+
+    if (value === 'last_30') {
+      const start = new Date(today);
+      start.setUTCDate(start.getUTCDate() - 29);
+      next.startDate = iso(start);
+      next.endDate = iso(today);
+    }
+
+    if (value === 'last_90') {
+      const start = new Date(today);
+      start.setUTCDate(start.getUTCDate() - 89);
+      next.startDate = iso(start);
+      next.endDate = iso(today);
+    }
+
+    setFilters(current => ({ ...current, ...next }));
+  };
+
   const clearFilters = () => {
-    setFilters({ severity: '', category: '', requesterType: '', country: '' });
+    setFilters({ severity: '', category: '', requesterType: '', country: '', department: '', datePreset: 'all', startDate: '', endDate: '' });
   };
 
   return (
@@ -318,12 +506,18 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
         <div className="hero-stat-block">
           <span className="status-pill live">Live</span>
           <div className="hero-stat-kicker">Default window</div>
-          <div className="hero-stat-value">Last 6 months</div>
+          <div className="hero-stat-value">{filters.datePreset === 'all' ? 'All history' : datePresets.find(item => item.value === filters.datePreset)?.label || 'Custom'}</div>
           <div className="hero-stat-meta">{fmt.date(dashboard.summary.windowStart)} to {fmt.date(dashboard.summary.windowEnd)}</div>
         </div>
       </section>
 
       <section className="info-strip">
+        {staleNotice && (
+          <div className="info-strip-item">
+            <span className="info-strip-label">Live refresh</span>
+            <span className="info-strip-value">{staleNotice}</span>
+          </div>
+        )}
         <div className="info-strip-item">
           <span className="info-strip-label">Source model</span>
           <span className="info-strip-value">AI context enriched with raw ticket operating fields</span>
@@ -345,7 +539,11 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
         </div>
         <div className="tab-nav" role="tablist" aria-label="Support views">
           <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('overview')}>Overview</button>
+          <button className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('queue')}>Queue</button>
           <button className={`tab-btn ${activeTab === 'themes' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('themes')}>Themes</button>
+          <button className={`tab-btn ${activeTab === 'heatmaps' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('heatmaps')}>Heatmaps</button>
+          <button className={`tab-btn ${activeTab === 'customers' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('customers')}>Customers</button>
+          <button className={`tab-btn ${activeTab === 'quality' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('quality')}>Quality</button>
           <button className={`tab-btn ${activeTab === 'insights' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('insights')}>Insights</button>
         </div>
       </div>
@@ -359,6 +557,24 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
       </div>
 
       <section className="filter-panel">
+        <div className="filter-group">
+          <label htmlFor="support-date-preset">Date window</label>
+          <select id="support-date-preset" className="f-select" value={filters.datePreset} onChange={event => setDatePreset(event.target.value)}>
+            {datePresets.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        {filters.datePreset === 'custom' && (
+          <>
+            <div className="filter-group">
+              <label htmlFor="support-start-date">Start date</label>
+              <input id="support-start-date" className="f-select" type="date" value={filters.startDate} onChange={event => setFilter('startDate', event.target.value)} />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="support-end-date">End date</label>
+              <input id="support-end-date" className="f-select" type="date" value={filters.endDate} onChange={event => setFilter('endDate', event.target.value)} />
+            </div>
+          </>
+        )}
         <div className="filter-group">
           <label htmlFor="support-severity">Severity</label>
           <select id="support-severity" className="f-select" value={filters.severity} onChange={event => setFilter('severity', event.target.value)}>
@@ -378,6 +594,13 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
           <select id="support-requester" className="f-select" value={filters.requesterType} onChange={event => setFilter('requesterType', event.target.value)}>
             <option value="">All requesters</option>
             {(filterOptions.requesterTypes || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label htmlFor="support-department">Department</label>
+          <select id="support-department" className="f-select" value={filters.department} onChange={event => setFilter('department', event.target.value)}>
+            <option value="">All departments</option>
+            {(filterOptions.departments || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
         </div>
         <div className="filter-group">
@@ -429,6 +652,50 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
         </>
       )}
 
+      {activeTab === 'queue' && (
+        <>
+          <div className="kpi-grid">
+            <KPICard label="Queue size" value={fmt.number(dashboard.queues.totalOpenOrPending)} sub="Open or pending tickets" sign={dashboard.queues.totalOpenOrPending > 0 ? 'neg' : 'pos'} />
+            <KPICard label="Queue L4" value={fmt.number((dashboard.queues.byBucket || []).reduce((sum, row) => sum + row.l4Tickets, 0))} sign="neg" />
+            <KPICard label="Needs handoff" value={fmt.number((dashboard.queues.byBucket || []).reduce((sum, row) => sum + row.requiresInternalHandoff, 0))} />
+            <KPICard label="Needs client input" value={fmt.number((dashboard.queues.byBucket || []).reduce((sum, row) => sum + row.requiresClientInstruction, 0))} />
+          </div>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Queue age</div>
+              <MetricTable rows={dashboard.queues.byBucket || []} label="Age bucket" extraColumns={[
+                { key: 'l4Tickets', label: 'L4' },
+                { key: 'requiresInternalHandoff', label: 'Handoff' },
+                { key: 'requiresClientInstruction', label: 'Client input' },
+              ]} />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Open queue by category</div>
+              <MetricTable rows={dashboard.queues.byCategory || []} label="Category" extraColumns={[
+                { key: 'l4Tickets', label: 'L4' },
+                { key: 'requiresInternalHandoff', label: 'Handoff' },
+              ]} />
+            </div>
+          </div>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Open queue by department</div>
+              <MetricTable rows={dashboard.queues.byDepartment || []} label="Department" extraColumns={[
+                { key: 'l4Tickets', label: 'L4' },
+                { key: 'requiresInternalHandoff', label: 'Handoff' },
+              ]} />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Open queue by severity</div>
+              <MetricTable rows={dashboard.queues.bySeverity || []} label="Severity" extraColumns={[
+                { key: 'l4Tickets', label: 'L4' },
+                { key: 'requiresInternalHandoff', label: 'Handoff' },
+              ]} />
+            </div>
+          </div>
+        </>
+      )}
+
       {activeTab === 'themes' && (
         <>
           <div className="charts-row">
@@ -454,6 +721,70 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
           </div>
 
           <div className="chart-card">
+            <div className="chart-title">Tag intelligence</div>
+            <MetricTable rows={dashboard.tags || []} label="Tag" extraColumns={[
+              { key: 'openOrPendingTickets', label: 'Open' },
+              { key: 'l4Tickets', label: 'L4' },
+              { key: 'requiresInternalHandoff', label: 'Handoff' },
+            ]} />
+          </div>
+        </>
+      )}
+
+      {activeTab === 'heatmaps' && (
+        <>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Category x severity</div>
+              {dashboard.heatmaps.categorySeverity.length ? <CategorySeverityHeatmap rows={dashboard.heatmaps.categorySeverity} /> : <div className="no-data">No category severity heatmap for these filters.</div>}
+            </div>
+          </div>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Category x month</div>
+              {dashboard.heatmaps.monthCategory.length ? <MonthCategoryMatrix rows={dashboard.heatmaps.monthCategory} /> : <div className="no-data">No category month matrix for these filters.</div>}
+            </div>
+          </div>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Country x category</div>
+              {dashboard.heatmaps.countryCategory.length ? <CountryCategoryHeatmap rows={dashboard.heatmaps.countryCategory} /> : <div className="no-data">No country category heatmap for these filters.</div>}
+            </div>
+          </div>
+          <div className="chart-card">
+            <div className="chart-title">Department burden</div>
+            <MetricTable rows={dashboard.departments || []} label="Department" extraColumns={[
+              { key: 'openOrPendingTickets', label: 'Open' },
+              { key: 'l4Tickets', label: 'L4' },
+              { key: 'requiresInternalHandoff', label: 'Handoff' },
+              { key: 'platformBugTickets', label: 'Platform' },
+              { key: 'payrollTickets', label: 'Payroll' },
+            ]} />
+          </div>
+        </>
+      )}
+
+      {activeTab === 'customers' && (
+        <>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Customer segment mix</div>
+              <MetricTable rows={dashboard.segments.bySegment || []} label="Segment" extraColumns={[
+                { key: 'openOrPendingTickets', label: 'Open' },
+                { key: 'l4Tickets', label: 'L4' },
+                { key: 'badSatisfactionTickets', label: 'Bad sat' },
+              ]} />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Churn risk mix</div>
+              <MetricTable rows={dashboard.segments.byChurnRisk || []} label="Churn risk" extraColumns={[
+                { key: 'openOrPendingTickets', label: 'Open' },
+                { key: 'l4Tickets', label: 'L4' },
+                { key: 'requiresInternalHandoff', label: 'Handoff' },
+              ]} />
+            </div>
+          </div>
+          <div className="chart-card">
             <div className="chart-title">Company ID hotspots</div>
             <div className="table-wrap">
               <table className="data-table">
@@ -478,6 +809,52 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'quality' && (
+        <>
+          <div className="kpi-grid">
+            <KPICard label="Raw rows" value={fmt.number(dashboard.dataQuality.rawTicketRows)} />
+            <KPICard label="AI rows" value={fmt.number(dashboard.dataQuality.aiContextRows)} sub={fmt.pct(dashboard.dataQuality.aiCoveragePct)} />
+            <KPICard label="Missing country" value={fmt.number(dashboard.dataQuality.missingCountry)} />
+            <KPICard label="Missing segment" value={fmt.number(dashboard.dataQuality.missingCustomerSegment)} />
+          </div>
+          <div className="charts-row">
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Field completeness</div>
+              <DistributionTable rows={dashboard.dataQuality.completeness || []} label="Field" />
+            </div>
+            <div className="chart-card" style={{ flex: 1 }}>
+              <div className="chart-title">Monthly data quality</div>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th className="r">Raw</th>
+                      <th className="r">AI rows</th>
+                      <th className="r">Missing country</th>
+                      <th className="r">Missing category</th>
+                      <th className="r">Missing severity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(dashboard.dataQuality.byMonth || []).map(row => (
+                      <tr key={row.month}>
+                        <td>{fmt.month(row.month)}</td>
+                        <td className="r">{fmt.number(row.rawTicketRows)}</td>
+                        <td className="r">{fmt.number(row.aiContextRows)}</td>
+                        <td className="r">{fmt.number(row.missingCountry)}</td>
+                        <td className="r">{fmt.number(row.missingCategory)}</td>
+                        <td className="r">{fmt.number(row.missingSeverity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </>
@@ -530,18 +907,21 @@ const SupportDashboardView = ({ dashboard, filters, setFilters, refresh }) => {
 };
 
 const App = () => {
-  const [filters, setFilters] = useState({ severity: '', category: '', requesterType: '', country: '' });
-  const [dashboard, setDashboard] = useState(() => readCache({ severity: '', category: '', requesterType: '', country: '' }));
-  const [loading, setLoading] = useState(() => !readCache({ severity: '', category: '', requesterType: '', country: '' }));
+  const [filters, setFilters] = useState(defaultFilters);
+  const [dashboard, setDashboard] = useState(() => readCache(defaultFilters) || readLastGood());
+  const [loading, setLoading] = useState(() => !(readCache(defaultFilters) || readLastGood()));
   const [error, setError] = useState('');
+  const [staleNotice, setStaleNotice] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       try {
         setError('');
+        setStaleNotice('');
         setLoading(true);
 
+        const apiFilters = toApiFilters(filters);
         const cached = refreshKey === 0 ? readCache(filters) : null;
         if (cached) {
           setDashboard(cached);
@@ -553,10 +933,25 @@ const App = () => {
           throw new Error('The shared dashboard service is not available in the browser yet.');
         }
 
-        const payload = await window.dashboardApi.getSupportDashboard(filters);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        let payload;
+        try {
+          payload = await window.dashboardApi.getSupportDashboard(apiFilters, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeout);
+        }
         setDashboard(payload);
         writeCache(filters, payload);
+        writeLastGood(payload);
       } catch (event) {
+        const fallback = readCache(filters) || readLastGood();
+        if (fallback) {
+          setDashboard(fallback);
+          setStaleNotice('Showing the last successful support snapshot.');
+          return;
+        }
+
         setError(event.message || String(event));
       } finally {
         setLoading(false);
@@ -592,6 +987,7 @@ const App = () => {
               filters={filters}
               setFilters={setFilters}
               refresh={() => setRefreshKey(value => value + 1)}
+              staleNotice={staleNotice}
             />
           )}
         </section>
